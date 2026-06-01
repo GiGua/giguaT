@@ -1254,6 +1254,19 @@ class BattleEngine:
 # ═══════════════════ Flask ═══════════════════
 
 app=Flask(__name__)
+
+# ═══ 全局错误处理：所有错误返回JSON，不让前端收到HTML ═══
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"ok":False,"error":"接口不存在","status":404}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"ok":False,"error":"服务器内部错误","status":500}), 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({"ok":False,"error":str(e)[:200],"status":500}), 500
 player:Optional[Character]=None;battle:Optional[BattleEngine]=None
 enemy:Optional[Character]=None;battle_over=None
 
@@ -1423,17 +1436,29 @@ def api_profile_migrate():
     return jsonify({"ok":pid is not None,"profile_id":pid})
 
 # ═══ 账号密码认证 ═══
-AUTH_FILE = os.path.join(SAVE_DIR, "auth.json")
+AUTH_FILE = os.path.join(SAVES_DIR, "auth.json")
 
 def load_auth():
-    if os.path.exists(AUTH_FILE):
-        try:
-            with open(AUTH_FILE,'r',encoding='utf-8') as f:return json.load(f)
-        except:pass
+    ensure_saves_dir()
+    try:
+        if os.path.exists(AUTH_FILE):
+            with open(AUTH_FILE,'r',encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict): return data
+    except Exception as e:
+        print(f"[AUTH] load_auth error: {e}")
     return {}
 
 def save_auth(data):
-    with open(AUTH_FILE,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
+    ensure_saves_dir()
+    try:
+        tmp = AUTH_FILE + ".tmp"
+        with open(tmp,'w',encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, AUTH_FILE)  # 原子写入，防止写一半崩溃
+        print(f"[AUTH] saved {len(data)} users")
+    except Exception as e:
+        print(f"[AUTH] save_auth error: {e}")
 
 def hash_password(pw):
     return hashlib.sha256(pw.encode('utf-8')).hexdigest()

@@ -212,7 +212,10 @@ async function doLogin(){
   const p=document.getElementById('login-pass').value.trim();
   const err=document.getElementById('login-err');
   if(!u||!p){err.textContent='请输入用户名和密码';return}
+  err.textContent='登录中…';err.style.color='var(--dim)';
   const r=await api('/api/auth/login',{username:u,password:p});
+  err.style.color='var(--red)';
+  if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'登录失败';return}
   loginUser=r.username;
   document.getElementById('login-overlay').style.display='none';
@@ -227,7 +230,10 @@ async function doRegister(){
   if(!u||u.length<2){err.textContent='用户名至少2个字符';return}
   if(!p||p.length<3){err.textContent='密码至少3个字符';return}
   if(p!==p2){err.textContent='两次密码不一致';return}
+  err.textContent='注册中…';err.style.color='var(--dim)';
   const r=await api('/api/auth/register',{username:u,password:p});
+  err.style.color='var(--red)';
+  if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'注册失败';return}
   loginUser=r.username;
   document.getElementById('login-overlay').style.display='none';
@@ -250,6 +256,12 @@ async function doLogout(){
 // 启动时检查登录状态
 (async function initAuth(){
   const r=await api('/api/auth/status');
+  if(r.offline){
+    // 服务器未连接，保持登录页但显示提示
+    document.getElementById('login-err').textContent='服务器未连接，请刷新页面';
+    document.getElementById('login-err').style.color='var(--red)';
+    return;
+  }
   if(r.logged_in){
     loginUser=r.username;
     document.getElementById('login-overlay').style.display='none';
@@ -352,22 +364,21 @@ async function api(u,d=null){
   const o=d?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}:{};
   try{
     const res=await fetch(A+u,o);
-    if(!res.ok){
-      console.error(`API ${res.status} ${u}: ${res.statusText}`);
-      addLog(`⚠️ 服务器错误(${res.status})，请稍后重试`,'en');
-      return {ok:false,error:`HTTP ${res.status}`,status:res.status};
-    }
     const text=await res.text();
-    try{return JSON.parse(text);}
-    catch(pe){
-      console.error(`API JSON parse error ${u}:`,text.substring(0,200));
-      addLog('⚠️ 数据解析异常，请刷新页面','en');
-      return {ok:false,error:'JSON parse error',raw:text.substring(0,500)};
+    try{
+      const data=JSON.parse(text);
+      // 后端返回的JSON错误（如密码错误、用户名不存在）原样传递
+      if(!res.ok && data.ok===undefined) data.ok=false;
+      return data;
+    }catch(pe){
+      // 非JSON响应（HTML错误页等）
+      console.error(`API ${res.status} ${u}: non-JSON response`);
+      addLog(`⚠️ 服务器异常(${res.status})，请刷新`,'en');
+      return {ok:false,error:`服务器返回异常 (${res.status})`,status:res.status};
     }
   }catch(e){
-    console.error(`API network error ${u}:`,e.message||e);
-    addLog('⚠️ 网络连接失败，检查网络后刷新','en');
-    return {ok:false,error:e.message||'Network error',offline:true};
+    console.error(`API offline ${u}:`,e.message||e);
+    return {ok:false,error:'网络连接失败',offline:true};
   }
 }
 
@@ -435,9 +446,8 @@ async function smm(){
   resetToMainPage();battle=null;enemyData=null;dungeonData=null;dungeonStage=0;
   const r=await api('/api/state');
   if(!r.ok){
-    const st=document.getElementById('content-status');
-    if(st)st.textContent='服务器连接失败，请刷新页面或稍后再试';
-    document.getElementById('content').innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--dim)"><div style="font-size:32px;margin-bottom:12px">🔌</div><div>服务器连接失败</div><div style="font-size:12px;margin-top:8px">${r.error||'请检查网络后刷新页面'}</div><button class="btn btn-c btn-sm" onclick="location.reload()" style="margin-top:16px">🔄 刷新页面</button></div>`;
+    const msg=r.offline?'网络连接失败，请检查网络后刷新':'服务器繁忙，请稍后重试';
+    document.getElementById('content').innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--dim)"><div style="font-size:32px;margin-bottom:12px">🔌</div><div>${msg}</div><div style="font-size:12px;margin-top:8px">${r.error||''}</div><button class="btn btn-c btn-sm" onclick="location.reload()" style="margin-top:16px">🔄 刷新页面</button></div>`;
     return;
   }
   if(r.has_player)setPlayer(r.player);rsb();
