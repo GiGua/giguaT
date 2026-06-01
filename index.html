@@ -395,7 +395,7 @@ function addLog(m,cls=''){const l=document.getElementById('log-area');l.innerHTM
 // ═══════════════ sidebar ═══════════════
 function rsb(){
   if(!player){document.getElementById('sidebar').innerHTML='';return}
-  const p={name:'未读取存档',gender:'男',level:1,coins:0,hp:1,maxhp:1,mp:0,maxmp:0,rage:0,exp:0,exp_need:1,atk:0,defense:0,agility:0,luk:0,wdmg:0,weapon_name:'无',enhance:0,power:0,crit_rate:0,equip_defense:0,stones_small:0,stones_medium:0,stones_large:0,wins:0,battles:0,dungeon_clears:0,rating:1000,magic_can_fragment:0,weapon_fragments:0,equip_fragments:0,angel_hammer:0,angel_pot:0,...player};
+  const p={name:'未读取存档',gender:'男',level:1,coins:0,hp:1,maxhp:1,mp:0,maxmp:0,rage:0,exp:0,exp_need:1,atk:0,defense:0,agility:0,luk:0,wdmg:0,weapon_name:'无',enhance:0,power:0,crit_rate:0,equip_defense:0,stones_small:0,stones_medium:0,stones_large:0,wins:0,battles:0,dungeon_clears:0,rating:1000,magic_can_fragment:0,weapon_fragments:{},equip_fragments:{},angel_hammer:0,angel_pot:0,owned_weapons:['fire'],owned_equipment:[],silver_pot:0,gold_pot:0,...player};
   player=p;
   const en=p.equip_names||{};
   document.getElementById('sidebar').innerHTML=`
@@ -425,7 +425,7 @@ function rsb(){
     <div style="font-size:10px;color:var(--dim)">装备防御:+${p.equip_defense||0}</div>
     <div class="sep"></div>
     <div style="font-size:10px;color:var(--dim)">💎 强化石: 小${p.stones_small} 中${p.stones_medium} 大${p.stones_large}</div>
-    <div style="font-size:10px;color:var(--dim)">🧩 碎片: 魔罐${p.magic_can_fragment} 武器${p.weapon_fragments} 装备${p.equip_fragments}</div>
+    <div style="font-size:10px;color:var(--dim)">🧩 碎片: 魔罐${p.magic_can_fragment} 武器${typeof p.weapon_fragments==='object'?Object.values(p.weapon_fragments||{}).reduce((a,b)=>a+b,0):(p.weapon_fragments||0)} 装备${typeof p.equip_fragments==='object'?Object.values(p.equip_fragments||{}).reduce((a,b)=>a+b,0):(p.equip_fragments||0)}</div>
     <div style="font-size:10px;color:var(--dim)">🏺 魔罐${p.angel_pot} | 🔨 魔锤${p.angel_hammer}</div>
     <div style="font-size:10px;color:var(--dim)">胜场${p.wins}/${p.battles} | 副本${p.dungeon_clears}</div>
   </div>`}
@@ -699,7 +699,6 @@ document.head.appendChild(cardPulseStyle);
 // ═══════════════ 背包系统 ═══════════════
 async function sinv(){enterPage('inventory');
   const r=await api('/api/inventory');
-  const cr=await api('/api/craftables');
   let h='<div class="fade-in"><h2>🎒 我的背包</h2>';
   // 武器区
   h+='<h3>⚔️ 武器 ('+(r.weapons||[]).length+')</h3><div class="wgrid">';
@@ -711,22 +710,6 @@ async function sinv(){enterPage('inventory');
     </div>`;
   });
   h+='</div>';
-  h+=`<h3>🧩 碎片合成</h3><div class="card"><div style="font-size:11px;color:var(--dim);margin-bottom:6px">武器碎片 ${cr.weapon_fragments||0} | 装备碎片 ${cr.equip_fragments||0}</div><div class="wgrid">`;
-  (cr.weapons||[]).slice(0,8).forEach(w=>{
-    h+=`<div class="wcard" style="border-color:${w.color}40;${w.owned?'opacity:.55':''}">
-      <div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.quality_tag} ${w.icon||'⚔️'} ${w.name}</div>
-      <div class="ws">需要武器碎片 ${w.need}</div>
-      <button class="btn btn-sm ${w.can&&!w.owned?'btn-c':''}" onclick="craftWeapon('${w.id}')" ${(!w.can||w.owned)?'disabled':''}>${w.owned?'已拥有':'合成'}</button>
-    </div>`;
-  });
-  (cr.equipment||[]).slice(0,8).forEach(e=>{
-    h+=`<div class="wcard" style="border-color:${e.color}40;${e.owned?'opacity:.55':''}">
-      <div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag} ${e.name}</div>
-      <div class="ws">${e.slot} | 需要装备碎片 ${e.need}</div>
-      <button class="btn btn-sm ${e.can&&!e.owned?'btn-c':''}" onclick="craftEquip('${e.id}')" ${(!e.can||e.owned)?'disabled':''}>${e.owned?'已拥有':'合成'}</button>
-    </div>`;
-  });
-  h+='</div></div>';
   // 装备区
   h+='<h3>🛡️ 装备 ('+(r.equipment||[]).length+')</h3><div class="wgrid">';
   (r.equipment||[]).forEach(e=>{
@@ -823,22 +806,50 @@ async function sdd(did){const r=await api('/api/start_dungeon',{dungeon_id:did})
 
 // ═══════════════ 武器商店 ═══════════════
 async function ss(){enterPage('shop');
-  const r=await api('/api/weapons');rsb();
-  let h='<div class="fade-in"><h2>🛒 武器商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币 | 当前:<b style="color:var(--yellow)">'+((player&&player.weapon_name)||'无')+'+'+((player&&player.enhance)||0)+'</b></p><p style="font-size:11px;color:var(--purple)">金币商店只卖到极·武器：真·价格×10，极·价格×100；神器·武器只能用70片武器碎片兑换，或通过副本/天使魔罐获取。</p><div class="wgrid">';
+  const r=await api('/api/weapons');const cr=await api('/api/craftables');rsb();
+  let h='<div class="fade-in"><h2>🛒 武器商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币 | 当前:<b style="color:var(--yellow)">'+((player&&player.weapon_name)||'无')+'+'+((player&&player.enhance)||0)+'</b></p><p style="font-size:11px;color:var(--purple)">金币只卖到极·武器；神器·传说·神话武器只能用70片同名碎片兑换。</p>';
+  // 金币购买区
+  h+='<h3>💰 金币购买</h3><div class="wgrid">';
   r.weapons.forEach(w=>{const eq=w.id===r.equipped;
     h+=`<div class="wcard ${eq?'eq':''}" onclick="${eq?'':`bw('${w.id}')`}" style="border-color:${w.color}40"><div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.quality_tag} ${w.name}</div><div class="ws">伤害${w.base_damage} 攻击${w.atk} 防御${w.defense} 敏捷${w.agility} 幸运${w.luck}</div><div class="wp" style="color:${r.coins>=w.price&&r.level>=w.level_req?'var(--green)':'var(--red)'}">${fmtNum(w.price)}💰 Lv.${w.level_req}+ ${eq?'✅':''}</div></div>`});
-  document.getElementById('content').innerHTML=h+'</div></div>'}
+  h+='</div>';
+  // 碎片合成区
+  if(cr.weapons&&cr.weapons.length>0){
+    h+='<h3>🧩 碎片合成 (每把需70同名碎片)</h3><div class="wgrid">';
+    cr.weapons.forEach(w=>{
+      h+=`<div class="wcard" style="border-color:${w.color}40;${w.owned?'opacity:.45':''}">
+        <div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.quality_tag} ${w.icon||'⚔️'} ${w.name}</div>
+        <div class="ws">需要: ${w.name}碎片 ${w.need}片 (已有 ${w.have||0})</div>
+        <button class="btn btn-sm ${w.can&&!w.owned?'btn-c':''}" onclick="craftWeapon('${w.id}')" ${(!w.can||w.owned)?'disabled':''}>${w.owned?'已拥有':'合成'}</button>
+      </div>`;
+    });
+    h+='</div>';
+  }
+  document.getElementById('content').innerHTML=h+'</div>'}
 async function bw(wid){const r=await api('/api/buy_weapon',{weapon_id:wid});if(r.ok){setPlayer(r.player);rsb();ss();addLog('✅ '+r.msg)}else alert(r.msg)}
 
 // ═══════════════ 装备商店 ═══════════════
 async function ses(){enterPage('equip_shop');
-  const r=await api('/api/equipments');rsb();const eq=r.equipped||{};
-  let h='<div class="fade-in"><h2>🛡️ 装备商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币</p><p style="font-size:11px;color:var(--purple)">金币最高可购买到极·装备：真·价格×10，极·价格×100；神器·装备只能用70片装备碎片兑换，或通过副本/魔罐获取。</p>'
+  const r=await api('/api/equipments');const cr=await api('/api/craftables');rsb();const eq=r.equipped||{};
+  let h='<div class="fade-in"><h2>🛡️ 装备商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币</p><p style="font-size:11px;color:var(--purple)">金币只卖到极·装备；神器·装备只能用70片同名碎片兑换。</p>';
+  // 金币购买区
   const slots={'头盔':'已装备:'+(eq.helmet||'无'),'胸甲':'已装备:'+(eq.chest||'无'),'护腿':'已装备:'+(eq.boots||'无'),'饰品':'已装备:'+(eq.accessory||'无')};
   for(const[sn,sv]of Object.entries(slots)){h+=`<h3>${sn}</h3><p style="font-size:11px;color:var(--dim)">${sv}</p><div class="wgrid">`;
     r.equipments.filter(e=>e.slot==sn).forEach(e=>{const ed=eq.helmet==e.id||eq.chest==e.id||eq.boots==e.id||eq.accessory==e.id;
       h+=`<div class="wcard ${ed?'eq':''}" onclick="${ed?'':`be('${e.id}')`}" style="border-color:${e.color}40"><div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag} ${e.name}</div><div class="ws">防${e.defense} HP+${e.hp_bonus} 攻+${e.atk_bonus} 敏+${e.agi_bonus} 运+${e.luk_bonus}</div><div class="wp" style="color:${r.coins>=e.price&&r.level>=e.level_req?'var(--green)':'var(--red)'}">${fmtNum(e.price)}💰 Lv.${e.level_req}+ ${ed?'✅':''}</div></div>`});
     h+='</div>'}
+  // 碎片合成区
+  if(cr.equipment&&cr.equipment.length>0){
+    h+='<h3>🧩 碎片合成 (每件需70同名碎片)</h3><div class="wgrid">';
+    cr.equipment.forEach(e=>{
+      h+=`<div class="wcard" style="border-color:${e.color}40;${e.owned?'opacity:.45':''}">
+        <div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag} ${e.name} (${e.slot})</div>
+        <div class="ws">需要: ${e.name}碎片 ${e.need}片 (已有 ${e.have||0})</div>
+        <button class="btn btn-sm ${e.can&&!e.owned?'btn-c':''}" onclick="craftEquip('${e.id}')" ${(!e.can||e.owned)?'disabled':''}>${e.owned?'已拥有':'合成'}</button>
+      </div>`;
+    });
+    h+='</div>';
+  }
   document.getElementById('content').innerHTML=h+'</div>'}
 async function be(eid){const r=await api('/api/buy_equip',{equip_id:eid});if(r.ok){setPlayer(r.player);rsb();ses();addLog('✅ '+r.msg)}else alert(r.msg)}
 
@@ -944,8 +955,8 @@ async function si(){enterPage('info');
   <div class="sr"><span class="sl">大强化石</span><span class="sv">${p.stones_large}</span></div></div>`
   h+=`<h3>🧩 高阶材料</h3><div class="card">
   <div class="sr"><span class="sl">魔罐碎片</span><span class="sv">${p.magic_can_fragment||0}</span></div>
-  <div class="sr"><span class="sl">武器碎片</span><span class="sv">${p.weapon_fragments||0}</span></div>
-  <div class="sr"><span class="sl">装备碎片</span><span class="sv">${p.equip_fragments||0}</span></div></div>`
+  <div class="sr"><span class="sl">武器碎片</span><span class="sv">${typeof p.weapon_fragments==='object'?Object.values(p.weapon_fragments||{}).reduce((a,b)=>a+b,0):(p.weapon_fragments||0)}</span></div>
+  <div class="sr"><span class="sl">装备碎片</span><span class="sv">${typeof p.equip_fragments==='object'?Object.values(p.equip_fragments||{}).reduce((a,b)=>a+b,0):(p.equip_fragments||0)}</span></div></div>`
   h+=`<div style="margin-top:8px"><button class="btn btn-c btn-sm" onclick="showAvatarUpload()">📷 上传头像</button></div></div>`
   document.getElementById('content').innerHTML=h}
 

@@ -1322,6 +1322,8 @@ def pd():
         "crit_rate":round(p.crit_rate*100,1),"crit_dmg":p.crit_dmg,"power":p.power,
         "weapon_name":w.name if w else"无","weapon_id":p.weapon_id,"enhance":p.get_enhance()[0],
         "equip_defense":p.equip_defense,"equip_names":e_names,
+        "owned_weapons":p.owned_weapons,"owned_equipment":p.owned_equipment,
+        "weapon_enhances":p.weapon_enhances,"enhance_luck":p.enhance_luck,
         "stones_small":p.stones_small,"stones_medium":p.stones_medium,"stones_large":p.stones_large,
         "magic_can_fragment":p.magic_can_fragment,"weapon_fragments":p.weapon_fragments,"equip_fragments":p.equip_fragments,
         "angel_pot":p.angel_pot,"angel_hammer":p.angel_hammer,"silver_pot":p.silver_pot,"gold_pot":p.gold_pot,
