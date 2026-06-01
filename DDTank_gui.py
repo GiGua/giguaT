@@ -2,11 +2,49 @@
 # -*- coding: utf-8 -*-
 """DDTank GUI v4 — 装备系统·Capoo/Kiwi敌人·强化石·头像·性别"""
 
-import json, os, random, time, math, sys, re, threading, webbrowser, base64, glob, hashlib, shutil, socket
+import json, os, random, time, math, sys, re, threading, webbrowser, base64, glob, hashlib, shutil, socket, uuid, datetime as _dt
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from enum import Enum
 from flask import Flask, jsonify, request, send_from_directory, send_file
+
+# ═══ PostgreSQL 支持 ═══
+DATABASE_URL = os.environ.get("DATABASE_URL")
+use_pg = False
+pg_conn = None
+
+def init_db():
+    """初始化数据库（PostgreSQL优先，本地auth.json fallback）"""
+    global use_pg, pg_conn
+    if not DATABASE_URL:
+        print("[DB] No DATABASE_URL → using local saves/auth.json")
+        return
+    try:
+        import psycopg
+        pg_conn = psycopg.connect(DATABASE_URL)
+        use_pg = True
+        with pg_conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS player_saves (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    save_data JSONB NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        pg_conn.commit()
+        print(f"[DB] PostgreSQL connected ({DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else DATABASE_URL}), tables ready")
+    except Exception as e:
+        print(f"[DB] PostgreSQL init failed: {e} → falling back to local auth.json")
+        use_pg = False
+        pg_conn = None
 
 # ═══════════════════ 数据定义 ═══════════════════
 
@@ -1309,7 +1347,7 @@ def save_p():
         data["combat_power"] = cp["total"]
         data["combat_power_breakdown"] = cp["breakdown"]
         data["combat_power_updated_at"] = datetime.datetime.now().isoformat()
-        # 写回profile文件
+        # 写回profile文件（本地）
         with open(get_profile_path(ACTIVE_PROFILE_ID),'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
         # 更新profiles元数据
         profiles=load_profiles()
@@ -1320,6 +1358,23 @@ def save_p():
                 pr["avatar_preview"]=player.avatar[:50] if player.avatar else ""
                 break
         save_profiles(profiles)
+        # ─── PostgreSQL: 保存到 player_saves ───
+        if use_pg and pg_conn:
+            try:
+                save_json = json.dumps(data, ensure_ascii=False)
+                # 需要找到 user_id：从当前玩家名反查
+                with pg_conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE username = %s", (player.name,))
+                    row = cur.fetchone()
+                    if row:
+                        cur.execute("""
+                            INSERT INTO player_saves (user_id, save_data, updated_at)
+                            VALUES (%s, %s, CURRENT_TIMESTAMP)
+                            ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
+                        """, (row[0], save_json))
+                pg_conn.commit()
+            except Exception as e:
+                print(f"[DB] save_p error: {e}")
 
 def pd():
     p=player;w=p.weapon
@@ -1435,10 +1490,20 @@ def api_profile_migrate():
     if pid:ACTIVE_PROFILE_ID=pid;player=load_profile(pid)
     return jsonify({"ok":pid is not None,"profile_id":pid})
 
-# ═══ 账号密码认证 ═══
+# ═══ 账号密码认证（PostgreSQL + 本地 fallback） ═══
 AUTH_FILE = os.path.join(SAVES_DIR, "auth.json")
 
 def load_auth():
+    """加载用户数据（PG优先，本地fallback）"""
+    if use_pg and pg_conn:
+        try:
+            with pg_conn.cursor() as cur:
+                cur.execute("SELECT id, username, password_hash, created_at FROM users")
+                rows = cur.fetchall()
+            return {str(r[0]): {"username": r[1], "password_hash": r[2], "created_at": str(r[3]) if r[3] else ""} for r in rows}
+        except Exception as e:
+            print(f"[AUTH] PG load error: {e}")
+    # 本地 fallback
     ensure_saves_dir()
     try:
         if os.path.exists(AUTH_FILE):
@@ -1446,51 +1511,119 @@ def load_auth():
                 data = json.load(f)
                 if isinstance(data, dict): return data
     except Exception as e:
-        print(f"[AUTH] load_auth error: {e}")
+        print(f"[AUTH] local load error: {e}")
     return {}
 
 def save_auth(data):
-    ensure_saves_dir()
-    try:
-        tmp = AUTH_FILE + ".tmp"
-        with open(tmp,'w',encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, AUTH_FILE)  # 原子写入，防止写一半崩溃
-        print(f"[AUTH] saved {len(data)} users")
-    except Exception as e:
-        print(f"[AUTH] save_auth error: {e}")
+    """保存用户数据（PG优先，本地fallback）"""
+    # PG 模式下不写本地文件；register/login 直接操作 PG
+    if not use_pg or not pg_conn:
+        ensure_saves_dir()
+        try:
+            tmp = AUTH_FILE + ".tmp"
+            with open(tmp,'w',encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, AUTH_FILE)
+        except Exception as e:
+            print(f"[AUTH] local save error: {e}")
 
 def hash_password(pw):
     return hashlib.sha256(pw.encode('utf-8')).hexdigest()
 
+def pg_save_player(user_id, player_obj):
+    """将玩家存档写入 PostgreSQL player_saves 表"""
+    if not use_pg or not pg_conn: return
+    try:
+        save_data = json.dumps(player_obj.to_dict(), ensure_ascii=False)
+        with pg_conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO player_saves (user_id, save_data, updated_at)
+                VALUES (%s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
+            """, (user_id, save_data))
+        pg_conn.commit()
+    except Exception as e:
+        print(f"[DB] pg_save_player error: {e}")
+
+def pg_load_player(user_id):
+    """从 PostgreSQL 加载玩家存档"""
+    if not use_pg or not pg_conn: return None
+    try:
+        with pg_conn.cursor() as cur:
+            cur.execute("SELECT save_data FROM player_saves WHERE user_id = %s", (user_id,))
+            row = cur.fetchone()
+        if row:
+            data = row[0]
+            if isinstance(data, str): data = json.loads(data)
+            return Character.from_dict(data)
+    except Exception as e:
+        print(f"[DB] pg_load_player error: {e}")
+    return None
+
 @app.route('/api/auth/register',methods=['POST'])
 def api_auth_register():
     global player, ACTIVE_PROFILE_ID
-    import uuid,datetime
     d=request.get_json(force=True,silent=True) or {}
     username=(d.get("username") or "").strip()
     password=(d.get("password") or "").strip()
     if not username or len(username)<2:return jsonify({"ok":False,"error":"用户名至少2个字符"})
     if not password or len(password)<3:return jsonify({"ok":False,"error":"密码至少3个字符"})
-    auth=load_auth()
-    # 检查用户名是否已存在
-    for pid,info in auth.items():
-        if info.get("username")==username:
+    pw_hash = hash_password(password)
+    now = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if use_pg and pg_conn:
+        # ─── PostgreSQL 路径 ───
+        try:
+            with pg_conn.cursor() as cur:
+                # 检查用户名重复
+                cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+                if cur.fetchone():
+                    return jsonify({"ok":False,"error":"用户名已被注册"})
+                # 创建用户
+                cur.execute(
+                    "INSERT INTO users (username, password_hash) VALUES (%s, %s) RETURNING id",
+                    (username, pw_hash))
+                uid = cur.fetchone()[0]
+                # 创建默认存档
+                c = Character(name=username, gender=d.get("gender","男"))
+                if d.get("avatar"): c.avatar = d["avatar"]
+                c.init_battle()
+                save_json = json.dumps(c.to_dict(), ensure_ascii=False)
+                cur.execute(
+                    "INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)",
+                    (uid, save_json))
+            pg_conn.commit()
+            # 仍写本地 profiles 用于排行榜等
+            pid = str(uuid.uuid4())[:8]
+            save_profile(c, pid)
+            profiles = load_profiles()
+            profiles["profiles"].append({"id":pid,"display_name":username,"created_at":now,"updated_at":now,"level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
+            profiles["active_profile_id"] = pid
+            save_profiles(profiles)
+            ACTIVE_PROFILE_ID = pid; player = c
+            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
+        except Exception as e:
+            pg_conn.rollback()
+            return jsonify({"ok":False,"error":f"注册失败: {str(e)[:100]}"})
+
+    # ─── 本地 auth.json fallback ───
+    auth = load_auth()
+    for pid, info in auth.items():
+        if info.get("username") == username:
             return jsonify({"ok":False,"error":"用户名已被注册"})
-    pid=str(uuid.uuid4())[:8]
-    c=Character(name=username,gender=d.get("gender","男"))
-    if d.get("avatar"):c.avatar=d["avatar"]
+    pid = str(uuid.uuid4())[:8]
+    c = Character(name=username, gender=d.get("gender","男"))
+    if d.get("avatar"): c.avatar = d["avatar"]
     c.init_battle()
-    now=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    save_profile(c,pid)
-    profiles=load_profiles()
+    save_profile(c, pid)
+    profiles = load_profiles()
     profiles["profiles"].append({"id":pid,"display_name":username,"created_at":now,"updated_at":now,"level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
-    profiles["active_profile_id"]=pid
+    profiles["active_profile_id"] = pid
     save_profiles(profiles)
-    auth[pid]={"username":username,"password_hash":hash_password(password),"created_at":now}
+    auth[pid] = {"username":username,"password_hash":pw_hash,"created_at":now}
     save_auth(auth)
-    ACTIVE_PROFILE_ID=pid;player=c
-    return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd()})
+    ACTIVE_PROFILE_ID = pid; player = c
+    return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local"})
 
 @app.route('/api/auth/login',methods=['POST'])
 def api_auth_login():
@@ -1499,15 +1632,49 @@ def api_auth_login():
     username=(d.get("username") or "").strip()
     password=(d.get("password") or "").strip()
     if not username or not password:return jsonify({"ok":False,"error":"请输入用户名和密码"})
+    pw_hash = hash_password(password)
+
+    if use_pg and pg_conn:
+        # ─── PostgreSQL 路径 ───
+        try:
+            with pg_conn.cursor() as cur:
+                cur.execute("SELECT id, password_hash FROM users WHERE username = %s", (username,))
+                row = cur.fetchone()
+                if not row:
+                    return jsonify({"ok":False,"error":"用户名不存在"})
+                uid, stored_hash = row
+                if stored_hash != pw_hash:
+                    return jsonify({"ok":False,"error":"密码错误"})
+                # 加载存档
+                cur.execute("SELECT save_data FROM player_saves WHERE user_id = %s", (uid,))
+                srow = cur.fetchone()
+                if not srow:
+                    return jsonify({"ok":False,"error":"存档数据丢失"})
+                data = srow[0]
+                if isinstance(data, str): data = json.loads(data)
+                c = Character.from_dict(data)
+            # 同步本地 profile（排行榜等兼容）
+            pid = str(uuid.uuid4())[:8]
+            save_profile(c, pid)
+            profiles = load_profiles()
+            profiles["profiles"].append({"id":pid,"display_name":c.name,"created_at":_dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"updated_at":"","level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
+            profiles["active_profile_id"] = pid
+            save_profiles(profiles)
+            ACTIVE_PROFILE_ID = pid; player = c; player.init_battle()
+            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
+        except Exception as e:
+            return jsonify({"ok":False,"error":f"登录异常: {str(e)[:100]}"})
+
+    # ─── 本地 auth.json fallback ───
     auth=load_auth()
     for pid,info in auth.items():
         if info.get("username")==username:
-            if info.get("password_hash")==hash_password(password):
+            if info.get("password_hash")==pw_hash:
                 p=load_profile(pid)
                 if not p:return jsonify({"ok":False,"error":"存档数据丢失"})
                 profiles=load_profiles();profiles["active_profile_id"]=pid;save_profiles(profiles)
                 ACTIVE_PROFILE_ID=pid;player=p;player.init_battle()
-                return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd()})
+                return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local"})
             else:
                 return jsonify({"ok":False,"error":"密码错误"})
     return jsonify({"ok":False,"error":"用户名不存在"})
@@ -2267,6 +2434,8 @@ def run_server():
         app.run(host='127.0.0.1', port=port, debug=False)
 
 if __name__=='__main__':
+    # ═══ 初始化数据库（PostgreSQL or local fallback） ═══
+    init_db()
     random.seed();ensure_gifs()
     # 自动生成bots
     data = load_bot_profiles()
