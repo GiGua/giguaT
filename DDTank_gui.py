@@ -1150,7 +1150,7 @@ class Character:
 # ═══════════════════ AI生成 ═══════════════════
 
 def gen_capoo_enemy(p_lv,diff="normal"):
-    """生成Capoo猫猫虫敌人"""
+    """生成Capoo猫猫虫敌人 — 前期HP降低"""
     ensure_gifs()
     profile=get_pvp_diff(diff)
     gif=random.choice(CAPOO_GIFS) if CAPOO_GIFS else ""
@@ -1158,20 +1158,24 @@ def gen_capoo_enemy(p_lv,diff="normal"):
     st=capoo_stats(gif)
     m=profile["scale"]
     lv=max(1, min(MAX_PLAYER_LEVEL, p_lv + max(-2, profile["lv"]//8) + random.randint(-1,2)))
-    # 使用武器
+    # 按等级缩放HP: 1-5级 120-300, 6-10级 300-600, 11-20级 600-1200, 20+ 递增
+    if lv<=5:    base_hp=int((120+lv*36)*m*st["def_m"])
+    elif lv<=10: base_hp=int((180+(lv-5)*60)*m*st["def_m"])
+    elif lv<=20: base_hp=int((300+(lv-10)*90)*m*st["def_m"])
+    else:        base_hp=int((700+(lv-20)*120)*m*st["def_m"])
     wid=random.choice(["fire","boom","wind","lightning","sima","tv","medkit","plunger","fruit"])
     ai=Character(name=name,level=lv,gender="未知",
-        base_hp=int(150*lv**0.8*m*st["def_m"]),
-        base_atk=int((15+lv*3)*m*st["atk_m"]),
-        base_def=int((10+lv*2)*m*st["def_m"]),
-        base_agi=int((10+lv*2)*m*st["agi_m"]),
-        base_luk=int((8+lv*1.5)*m*st["luk_m"]),
+        base_hp=base_hp,
+        base_atk=int((10+lv*2)*m*st["atk_m"]),
+        base_def=int((8+lv*1.5)*m*st["def_m"]),
+        base_agi=int((8+lv*1.5)*m*st["agi_m"]),
+        base_luk=int((6+lv*1)*m*st["luk_m"]),
         weapon_id=wid,weapon_enhance=min(12,int(lv/4)))
     ai._gif=gif; ai._type="capoo"; ai._tendency=st["倾向"]; ai._difficulty=profile
     return ai
 
 def gen_kiwi_enemy(p_lv,diff="normal",is_boss=False):
-    """生成Kiwi几维鸟敌人"""
+    """生成Kiwi几维鸟敌人 — 前期HP降低"""
     ensure_gifs()
     gif=random.choice(KIWI_GIFS) if KIWI_GIFS else ""
     kt=KIWI_DIFFICULTY["boss" if is_boss else diff]
@@ -1179,15 +1183,20 @@ def gen_kiwi_enemy(p_lv,diff="normal",is_boss=False):
     else: lv=max(1,p_lv+random.randint(-1,1))
     lv=max(1,lv)
     m=1.6 if is_boss else (0.75 if diff=="easy" else (1.25 if diff=="hard" else 1.0))
+    # 按等级缩放HP
+    if lv<=5:    base_hp=int((120+lv*36)*m*kt["def_m"])
+    elif lv<=10: base_hp=int((180+(lv-5)*60)*m*kt["def_m"])
+    elif lv<=20: base_hp=int((300+(lv-10)*90)*m*kt["def_m"])
+    else:        base_hp=int((700+(lv-20)*120)*m*kt["def_m"])
     wid=random.choice(["god_fire","god_boom","god_wind","god_lightning"]) if is_boss else random.choice(["fire","boom","wind","lightning"])
     name=f"{kt['前缀']}{random.choice(['黄','绿','棕','灰','白','金','黑'])}喙{kt['后缀']}"
     ai=Character(name=name,level=lv,gender="未知",
-        base_hp=int(150*lv**0.8*m*kt["def_m"]),
-        base_atk=int((15+lv*3)*m*kt["atk_m"]),
-        base_def=int((10+lv*2)*m*kt["def_m"]),
-        base_agi=int((10+lv*2)*m*kt["agi_m"]),
-        base_luk=int((8+lv*1.5)*m*kt["luk_m"]),
-        weapon_id=wid,weapon_enhance=min(12,int(lv/3)))
+        base_hp=base_hp,
+        base_atk=int((10+lv*2)*m*kt["atk_m"]),
+        base_def=int((8+lv*1.5)*m*kt["def_m"]),
+        base_agi=int((8+lv*1.5)*m*kt["agi_m"]),
+        base_luk=int((6+lv*1)*m*kt["luk_m"]),
+        weapon_id=wid,weapon_enhance=min(12,int(lv/4)))
     ai._gif=gif; ai._type="kiwi"; ai._diff=diff; ai._boss=is_boss
     return ai
 
@@ -1408,6 +1417,33 @@ def index():
 @app.route('/picture/<path:subpath>')
 def serve_picture(subpath):
     return send_from_directory(rp2("picture"), subpath)
+
+@app.route('/api/save',methods=['POST'])
+def api_save():
+    """手动保存：完整写入 PostgreSQL"""
+    global player
+    import traceback as _tb
+    if not player:
+        return jsonify({"ok":False,"msg":"未登录"})
+    try:
+        save_p()
+        if use_pg and pg_conn:
+            with pg_conn.cursor() as cur:
+                cur.execute("SELECT id FROM users WHERE username = %s", (player.name,))
+                row = cur.fetchone()
+                if row:
+                    cur.execute("""
+                        INSERT INTO player_saves (user_id, save_data, updated_at)
+                        VALUES (%s, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
+                    """, (row[0], player.to_dict()))
+            pg_conn.commit()
+        print(f"[SAVE] user={player.name} saved (pg={'yes' if use_pg else 'no'})")
+        return jsonify({"ok":True,"msg":"保存成功"})
+    except Exception as e:
+        print(f"[SAVE] error: {e}")
+        _tb.print_exc()
+        return jsonify({"ok":False,"msg":f"保存失败: {str(e)[:150]}"})
 
 @app.route('/api/state')
 def api_state():
@@ -1852,11 +1888,14 @@ def api_upload_avatar():
     d=request.get_json(force=True,silent=True) or {};player.avatar=d.get("avatar","");save_p()
     return jsonify({"ok":True})
 
-@app.route('/api/save',methods=['POST'])
-def api_save():save_p();return jsonify({"ok":True})
-
 @app.route('/api/delete',methods=['POST'])
 def api_delete():
+    """删除功能需 GM_SECRET 权限"""
+    d=request.get_json(force=True,silent=True) or {}
+    gm_env = os.environ.get("GM_SECRET","")
+    secret = d.get("gm_secret","")
+    if not gm_env or secret != gm_env:
+        return jsonify({"ok":False,"msg":"无权限"})
     global player, ACTIVE_PROFILE_ID
     deleted=[]
     if os.path.exists(SAVE_FILE):

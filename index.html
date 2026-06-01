@@ -177,7 +177,6 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
     <span id="hdr-user" style="font-size:10px;color:var(--cyan);margin-right:6px"></span>
     <button class="btn btn-sm btn-c" onclick="goBack()" id="btn-back" style="display:none">← 返回</button>
     <button class="btn btn-sm btn-c" onclick="saveGame()">💾 保存</button>
-    <button class="btn btn-sm btn-r" onclick="showDelete()">删除</button>
     <button class="btn btn-sm btn-r" onclick="doLogout()" style="font-size:9px">🚪</button>
   </div>
 </header>
@@ -413,30 +412,25 @@ function rsb(){
   <div class="fade-in" style="font-size:12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       ${p.avatar?`<img src="${p.avatar}" onerror="this.style.display='none'" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);object-fit:cover">`:`<div style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px">${p.gender=='女'?'♀':'♂'}</div>`}
-      <div><b style="color:var(--yellow);font-size:14px">${p.name}</b> ${p.gender=='女'?'♀':'♂'}<br><span style="color:var(--cyan)">Lv.${p.level}</span> 💰${p.coins}<br>${ratingBadge(p.rating)}</div>
+      <div><b style="color:var(--yellow);font-size:14px">${p.name}</b> ${p.gender=='女'?'♀':'♂'}<br><span style="color:var(--cyan)">Lv.${p.level}</span> 💰${fmtNum(p.coins)}<br>${ratingBadge(p.rating)}</div>
     </div>
     <div class="sep"></div>
     <div class="sr"><span class="sl">生命</span></div><div class="bw"><div class="bf" style="width:${p.hp/p.maxhp*100}%;background:linear-gradient(90deg,#ff3355,#ff6644,#00ff66)"></div></div>
     <div style="font-size:10px;text-align:right;color:var(--dim)">${p.hp||p.maxhp}/${p.maxhp}</div>
-    <div class="sr"><span class="sl">法力</span><span class="sv" style="color:var(--blue)">${p.mp}/${p.maxmp}</span></div>
-    <div class="sr"><span class="sl">怒气</span><span class="sv" style="color:var(--orange)">${p.rage||0}/100</span></div>
-    <div class="sr"><span class="sl">经验</span><span class="sv" style="color:var(--cyan)">${p.exp}/${p.exp_need}</span></div>
+    <div class="sr"><span class="sl">经验</span><span class="sv" style="color:var(--cyan)">${fmtNum(p.exp)}/${fmtNum(p.exp_need)}</span></div>
     <div class="sep"></div>
     <div class="sr"><span class="sl">攻击</span><span class="sv" style="color:var(--red)">${p.atk}</span></div>
     <div class="sr"><span class="sl">防御</span><span class="sv" style="color:var(--blue)">${p.defense}</span></div>
     <div class="sr"><span class="sl">敏捷</span><span class="sv" style="color:var(--green)">${p.agility}</span></div>
     <div class="sr"><span class="sl">幸运</span><span class="sv" style="color:var(--purple)">${p.luk}</span></div>
-    <div class="sr"><span class="sl">伤害</span><span class="sv" style="color:var(--orange)">${p.wdmg}</span></div>
     <div class="sep"></div>
     <div style="color:var(--yellow);font-size:11px">⚔️ ${p.weapon_name}+${p.enhance}</div>
-    <div style="margin:5px 0">${cpBadge(p.power)}</div><div style="font-size:10px;color:var(--dim)">暴击${p.crit_rate}%</div>
+    <div style="margin:5px 0">${cpBadge(p.power)}</div>
     <div class="sep"></div>
     <div style="font-size:11px">🛡️ 装备:</div>
     <div style="font-size:10px;color:var(--dim);line-height:1.4">头:${en.helmet||'无'} | 甲:${en.chest||'无'}<br>腿:${en.boots||'无'} | 饰:${en.accessory||'无'}</div>
-    <div style="font-size:10px;color:var(--dim)">装备防御:+${p.equip_defense||0}</div>
     <div class="sep"></div>
     <div style="font-size:10px;color:var(--dim)">💎 强化石: 小${p.stones_small} 中${p.stones_medium} 大${p.stones_large}</div>
-    <div style="font-size:10px;color:var(--dim)">🧩 碎片: 魔罐${p.magic_can_fragment} 武器${typeof p.weapon_fragments==='object'?Object.values(p.weapon_fragments||{}).reduce((a,b)=>a+b,0):(p.weapon_fragments||0)} 装备${typeof p.equip_fragments==='object'?Object.values(p.equip_fragments||{}).reduce((a,b)=>a+b,0):(p.equip_fragments||0)}</div>
     <div style="font-size:10px;color:var(--dim)">🏺 魔罐${p.angel_pot} | 🔨 魔锤${p.angel_hammer}</div>
     <div style="font-size:10px;color:var(--dim)">胜场${p.wins}/${p.battles} | 副本${p.dungeon_clears}</div>
   </div>`}
@@ -489,7 +483,11 @@ function sng(){showModal('🆕 创建角色',
   </div>`,
   '<button class="btn btn-c" onclick="ngg()">开始冒险</button> <button class="btn btn-r btn-sm" onclick="closeModal()">取消</button>')}
 async function loadGame(){const r=await api('/api/load');if(r.ok){setPlayer(r.player);rsb();smm();addLog('📂 读取存档成功！')}else alert('无存档')}
-async function saveGame(){await api('/api/save');addLog('💾 已保存')}
+async function saveGame(){
+  const r=await api('/api/save',{});
+  if(r.ok){addLog('💾 '+r.msg)}
+  else{addLog('❌ '+(r.msg||'保存失败'),'en')}
+}
 function showDelete(){showModal('⚠️ 删除','确认删除所有数据？','<button class="btn btn-r" onclick="delS()">确认</button> <button class="btn btn-sm" onclick="closeModal()">取消</button>')}
 async function delS(){
   await api('/api/delete');
@@ -575,7 +573,7 @@ async function pa(){console.log('[PA] playerAttack called');if(!battle)return;
     if(r.over){console.log('[PA] battle over:',r.over);eb(r);return}
     battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage;player.hp=r.player_hp;rsb();rbs();
     if(r.auto_angle)addLog(`⚡ AI: ${r.auto_formula||'自由'} 角度${r.auto_angle}° 力度${r.auto_power} | ${r.msg}`);
-    else addLog(r.msg,(r.log||[]).slice(-1)[0]?.crit?'cr':'pl');
+    else addLog(`${r.msg} | 你:${r.player_hp}/${player.maxhp} 敌:${r.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'pl');
     if(r.enemy_line)showDialogue(r.enemy_line);
     const isCrit=(r.log||[]).slice(-1)[0]?.crit||false;
     animShotEx(r.dmg||0,isCrit);
@@ -594,7 +592,7 @@ async function at(){console.log('[AT] ai_turn called | battle='+!!battle+' pHP='
     if(r.over){console.log('[AT] battle over:',r.over);eb(r);return}
     battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;player.hp=r.player_hp;rsb();rbs();
     if(r.enemy_line)showDialogue(r.enemy_line);
-    addLog('🔴 '+r.msg,(r.log||[]).slice(-1)[0]?.crit?'cr':'en');
+    addLog(`🔴 ${r.msg} | 你:${r.player_hp}/${player.maxhp} 敌:${r.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'en');
     document.getElementById('content').classList.add('shake');
     setTimeout(()=>document.getElementById('content').classList.remove('shake'),300);
     // 恢复按钮
