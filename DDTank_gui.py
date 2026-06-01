@@ -1304,6 +1304,9 @@ def server_error(e):
 
 @app.errorhandler(Exception)
 def handle_exception(e):
+    import traceback as _tb
+    print(f"[ERROR] Unhandled exception: {e}")
+    _tb.print_exc()
     return jsonify({"ok":False,"error":str(e)[:200],"status":500}), 500
 player:Optional[Character]=None;battle:Optional[BattleEngine]=None
 enemy:Optional[Character]=None;battle_over=None
@@ -1361,7 +1364,6 @@ def save_p():
         # ─── PostgreSQL: 保存到 player_saves ───
         if use_pg and pg_conn:
             try:
-                save_json = json.dumps(data, ensure_ascii=False)
                 # 需要找到 user_id：从当前玩家名反查
                 with pg_conn.cursor() as cur:
                     cur.execute("SELECT id FROM users WHERE username = %s", (player.name,))
@@ -1371,7 +1373,7 @@ def save_p():
                             INSERT INTO player_saves (user_id, save_data, updated_at)
                             VALUES (%s, %s, CURRENT_TIMESTAMP)
                             ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
-                        """, (row[0], save_json))
+                        """, (row[0], data))
                 pg_conn.commit()
             except Exception as e:
                 print(f"[DB] save_p error: {e}")
@@ -1410,12 +1412,28 @@ def serve_picture(subpath):
 @app.route('/api/state')
 def api_state():
     global player
-    profiles=load_profiles()
-    legacy=os.path.exists(SAVE_FILE) and not os.path.exists(SAVE_FILE+".migrated")
-    has_profile_save = bool(profiles.get("profiles"))
-    return jsonify({"has_player":player is not None,"has_save":os.path.exists(SAVE_FILE) or has_profile_save,
-        "profiles":profiles.get("profiles",[]),"active_id":profiles.get("active_profile_id"),
-        "legacy_exists":legacy,"player":pd()if player else None})
+    import traceback as _tb
+    try:
+        profiles=load_profiles()
+        legacy=os.path.exists(SAVE_FILE) and not os.path.exists(SAVE_FILE+".migrated")
+        has_profile_save = bool(profiles.get("profiles"))
+        player_data = None
+        if player:
+            try:
+                player_data = pd()
+            except Exception as pe:
+                print(f"[STATE] pd() error for player={player.name}: {pe}")
+                _tb.print_exc()
+                # pd() 崩溃时返回基本数据
+                player_data = {"name": player.name, "level": player.level, "error": "partial"}
+        print(f"[STATE] user={player.name if player else 'none'} has_player={player is not None} pg={'yes' if use_pg else 'no'}")
+        return jsonify({"ok": True, "has_player":player is not None, "has_save":os.path.exists(SAVE_FILE) or has_profile_save,
+            "profiles":profiles.get("profiles",[]),"active_id":profiles.get("active_profile_id"),
+            "legacy_exists":legacy,"player":player_data})
+    except Exception as e:
+        print(f"[STATE] CRASH: {e}")
+        _tb.print_exc()
+        return jsonify({"ok":False,"error":f"状态读取失败: {str(e)[:200]}"}), 500
 
 # ═══ 多存档 API ═══
 @app.route('/api/profiles')
@@ -1534,7 +1552,7 @@ def pg_save_player(user_id, player_obj):
     """将玩家存档写入 PostgreSQL player_saves 表"""
     if not use_pg or not pg_conn: return
     try:
-        save_data = json.dumps(player_obj.to_dict(), ensure_ascii=False)
+        save_data = player_obj.to_dict() if hasattr(player_obj, 'to_dict') else player_obj
         with pg_conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO player_saves (user_id, save_data, updated_at)
@@ -1554,7 +1572,12 @@ def pg_load_player(user_id):
             row = cur.fetchone()
         if row:
             data = row[0]
-            if isinstance(data, str): data = json.loads(data)
+            # psycopg3 JSONB 可能返回 dict 或 str
+            if isinstance(data, str):
+                data = json.loads(data)
+            elif not isinstance(data, dict):
+                print(f"[DB] pg_load_player: unexpected type {type(data)}")
+                return None
             return Character.from_dict(data)
     except Exception as e:
         print(f"[DB] pg_load_player error: {e}")
@@ -1588,10 +1611,9 @@ def api_auth_register():
                 c = Character(name=username, gender=d.get("gender","男"))
                 if d.get("avatar"): c.avatar = d["avatar"]
                 c.init_battle()
-                save_json = json.dumps(c.to_dict(), ensure_ascii=False)
                 cur.execute(
                     "INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)",
-                    (uid, save_json))
+                    (uid, c.to_dict()))
             pg_conn.commit()
             # 仍写本地 profiles 用于排行榜等
             pid = str(uuid.uuid4())[:8]
@@ -1645,14 +1667,21 @@ def api_auth_login():
                 uid, stored_hash = row
                 if stored_hash != pw_hash:
                     return jsonify({"ok":False,"error":"密码错误"})
-                # 加载存档
+                # 加载存档（不存在则自动补建）
                 cur.execute("SELECT save_data FROM player_saves WHERE user_id = %s", (uid,))
                 srow = cur.fetchone()
                 if not srow:
-                    return jsonify({"ok":False,"error":"存档数据丢失"})
-                data = srow[0]
-                if isinstance(data, str): data = json.loads(data)
-                c = Character.from_dict(data)
+                    # 自动补建默认存档
+                    print(f"[AUTH] player_saves missing for uid={uid}, auto-creating...")
+                    c = Character(name=username)
+                    c.init_battle()
+                    cur.execute("INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)", (uid, c.to_dict()))
+                    pg_conn.commit()
+                else:
+                    data = srow[0]
+                    if isinstance(data, str): data = json.loads(data)
+                    elif not isinstance(data, dict): data = {}
+                    c = Character.from_dict(data)
             # 同步本地 profile（排行榜等兼容）
             pid = str(uuid.uuid4())[:8]
             save_profile(c, pid)
@@ -1719,11 +1748,17 @@ def api_bots_simulate():
 
 @app.route('/api/chat')
 def api_chat():
-    log = load_chat_log()
-    if len(log) < 5:
-        simulate_bot_actions(2)
+    try:
         log = load_chat_log()
-    return jsonify({"ok":True,"messages":log[-50:]})
+        if not isinstance(log, list): log = []
+        if len(log) < 5:
+            simulate_bot_actions(2)
+            log = load_chat_log()
+            if not isinstance(log, list): log = []
+        return jsonify({"ok":True,"messages":log[-50:]})
+    except Exception as e:
+        print(f"[CHAT] error: {e}")
+        return jsonify({"ok":True,"messages":[]})
 
 @app.route('/api/chat/send',methods=['POST'])
 def api_chat_send():
@@ -1738,15 +1773,17 @@ def api_chat_send():
 
 @app.route('/api/announcements')
 def api_announcements():
-    data = load_announcements()
-    if not data:
-        simulate_bot_actions(2)
+    try:
         data = load_announcements()
-    if not data:
-        import datetime as _dt
-        data=[{"time":_dt.datetime.now().isoformat(),"msg":"欢迎来到 GiguaT，竞技场和几维鸟副本正在开放中！","type":"system"}]
-        save_announcements(data)
-    return jsonify({"ok":True,"announcements":data[-20:]})
+        if not isinstance(data, list): data = []
+        if not data:
+            simulate_bot_actions(2)
+            data = load_announcements()
+            if not isinstance(data, list): data = []
+        return jsonify({"ok":True,"announcements":data[-20:]})
+    except Exception as e:
+        print(f"[ANNOUNCE] error: {e}")
+        return jsonify({"ok":True,"announcements":[]})
 
 @app.route('/api/announcements/clear',methods=['POST'])
 def api_announcements_clear():
@@ -2435,7 +2472,11 @@ def run_server():
 
 if __name__=='__main__':
     # ═══ 初始化数据库（PostgreSQL or local fallback） ═══
+    print("=" * 50)
+    print(f"[STARTUP] DATABASE_URL={'SET' if DATABASE_URL else 'NOT SET'}")
     init_db()
+    print(f"[STARTUP] Storage: {'PostgreSQL' if use_pg else 'local saves/auth.json'}")
+    print("=" * 50)
     random.seed();ensure_gifs()
     # 自动生成bots
     data = load_bot_profiles()
