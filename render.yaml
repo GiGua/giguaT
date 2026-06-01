@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: giguat
+    env: python
+    region: singapore
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python DDTank_gui.py
+    envVars:
+      - key: RENDER
+        value: "true"

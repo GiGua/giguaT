@@ -1,0 +1,23 @@
+# GiguaT — 保存数据
+saves/
+bots/
+leaderboard_cache.json
+
+# 构建产物
+dist/
+build/
+__pycache__/
+*.spec
+
+# 测试
+test/
+
+# 备份文件
+*.bak
+*.bak_*
+
+# IDE / 工具
+.vscode/
+.idea/
+.hermes/
+*.pyc

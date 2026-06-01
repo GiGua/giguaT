@@ -1,0 +1,879 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GiguaT</title>
+<style>
+:root{--bg:#0a0a0f;--bg2:#12121a;--bg3:#1a1a2e;--border:#2a2a40;--text:#e0e0f0;--dim:#666688;--cyan:#00e5ff;--green:#00ff66;--red:#ff3355;--yellow:#ffcc00;--orange:#ff8800;--purple:#cc44ff;--blue:#3399ff;--pink:#ff44aa;--white:#f0f0ff;--radius:10px;--shadow:0 0 20px rgba(0,229,255,0.08)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:999}
+.avatar-frame{width:44px;height:44px;border-radius:12px;padding:2px;background:linear-gradient(135deg,#00e5ff,#8a5cff,#ffcc00);box-shadow:0 0 10px rgba(0,229,255,.35);flex:0 0 auto}
+.avatar-frame img{width:100%;height:100%;border-radius:10px;object-fit:cover;display:block;background:#111827}
+.avatar-frame-sm{width:28px;height:28px;border-radius:8px;padding:1px}
+.top-avatar-frame{width:72px;height:72px;border-radius:16px;padding:2px}
+.top-avatar-frame.gold{background:linear-gradient(135deg,#ffd700,#ffaa00,#ffd700)}
+.top-avatar-frame.silver{background:linear-gradient(135deg,#c0c0c0,#e8e8e8,#c0c0c0)}
+.top-avatar-frame.bronze{background:linear-gradient(135deg,#cd7f32,#e8a860,#cd7f32)}
+
+#app{max-width:1100px;margin:0 auto;padding:10px 15px}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;box-shadow:var(--shadow)}
+header .logo{font-size:20px;font-weight:900;letter-spacing:1px}
+header .logo s1{color:var(--cyan)}header .logo s2{color:var(--purple)}
+header .hdr-btns{display:flex;gap:8px;align-items:center}
+main{display:flex;gap:8px}
+#left-rail{width:250px;min-width:250px;display:flex;flex-direction:column;gap:8px}
+#sidebar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px;box-shadow:var(--shadow)}
+#content{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:460px;box-shadow:var(--shadow)}
+#log-area{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 14px;margin-top:8px;max-height:130px;overflow-y:auto;font-size:12px;color:var(--dim);box-shadow:var(--shadow)}
+#announce-bar{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;max-height:38px;overflow:hidden;display:block}
+#chat-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);display:block;box-shadow:var(--shadow);overflow:hidden}
+#chat-head{display:flex;justify-content:space-between;gap:6px;align-items:center;padding:6px 8px;background:var(--bg3);border-bottom:1px solid var(--border)}
+#chat-msgs{height:155px;overflow-y:auto;padding:6px 8px;font-size:11px;line-height:1.45}
+#chat-compose{display:flex;padding:6px 8px;gap:5px;border-top:1px solid var(--border);background:var(--bg3)}
+#social-panel{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.btn{display:inline-block;padding:7px 16px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;text-decoration:none;text-align:center}
+.btn:hover{transform:translateY(-1px);box-shadow:0 4px 15px rgba(0,0,0,.3)}
+.btn:active{transform:translateY(0)}
+.btn-c{background:linear-gradient(135deg,#006688,#0099aa);color:#fff}
+.btn-g{background:linear-gradient(135deg,#006633,#009944);color:#fff}
+.btn-r{background:linear-gradient(135deg,#661122,#993333);color:#fff}
+.btn-p{background:linear-gradient(135deg,#441166,#6633aa);color:#fff}
+.btn-o{background:linear-gradient(135deg,#884400,#aa6600);color:#fff}
+.btn-sm{padding:4px 10px;font-size:11px}.btn-lg{padding:11px 24px;font-size:15px}.btn-block{display:block;width:100%;margin:3px 0}
+.card{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;margin:5px 0}
+.cp-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;border:1px solid rgba(255,204,0,.55);background:linear-gradient(135deg,rgba(255,204,0,.18),rgba(255,136,0,.1));color:var(--yellow);font-weight:900;text-shadow:0 0 10px rgba(255,204,0,.45);box-shadow:0 0 16px rgba(255,204,0,.16)}
+.cp-badge b{font-size:15px;color:#ffe680}
+.rating-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:7px;border:1px solid rgba(0,229,255,.45);background:linear-gradient(135deg,rgba(0,229,255,.15),rgba(51,153,255,.08));color:var(--cyan);font-weight:800;box-shadow:0 0 14px rgba(0,229,255,.12)}
+.match-wait{min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.wait-ring{width:58px;height:58px;border-radius:50%;border:4px solid rgba(0,229,255,.18);border-top-color:var(--cyan);animation:spin .9s linear infinite;margin-bottom:14px}
+.ko-gray{filter:grayscale(1) brightness(.48);opacity:.55;transition:filter .45s,opacity .45s,transform .45s;transform:scale(.96)}
+.q-glow-3,.q-glow-4,.q-glow-5{text-shadow:0 0 8px currentColor,0 0 18px currentColor}
+.q-glow-4{filter:drop-shadow(0 0 6px rgba(255,136,0,.65))}
+.q-glow-5{animation:rareGlow 1.8s ease-in-out infinite}
+.enemy-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-width:420px;margin:8px auto}
+.enemy-stat-grid .sr{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;padding:4px 6px}
+.sr{display:flex;justify-content:space-between;padding:2px 0;font-size:12px}
+.sl{color:var(--dim)}.sv{font-weight:600}
+.bw{background:#1a1a30;border-radius:4px;height:14px;margin:3px 0;overflow:hidden}
+.bf{height:100%;border-radius:4px;transition:width .5s}
+.sep{height:1px;background:var(--border);margin:8px 0}
+h2{font-size:17px;margin-bottom:8px;color:var(--cyan)}
+h3{font-size:14px;color:var(--yellow);margin:6px 0}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mi{background:var(--bg3);border:2px solid var(--border);border-radius:10px;padding:16px;cursor:pointer;transition:all .25s;text-align:center}
+.mi:hover{border-color:var(--cyan);transform:translateY(-2px);box-shadow:0 0 20px rgba(0,229,255,.15)}
+.mi .ic{font-size:32px;margin-bottom:6px}.mi .tt{font-size:15px;font-weight:700;color:var(--white)}.mi .ds{font-size:11px;color:var(--dim)}
+
+/* 战斗GIF */
+.enemy-gif-wrap{text-align:center;margin:8px 0}
+.enemy-gif-wrap img{max-width:120px;max-height:120px;border-radius:12px;border:2px solid var(--border)}
+.enemy-gif-wrap .enemy-name{font-weight:700;font-size:14px;margin-top:4px}
+.dialogue-bubble{display:inline-block;background:var(--bg3);border:1px solid var(--cyan);border-radius:10px;padding:6px 14px;font-size:12px;color:var(--cyan);margin:4px 0;max-width:280px;animation:fadeIn .3s}
+
+/* 战斗 */
+.battle-top{display:flex;gap:12px;margin-bottom:10px;align-items:flex-start}
+.battle-vs{flex:1}
+#battle-canvas-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:8px;text-align:center;padding:4px}
+.action-row{display:flex;gap:10px;margin-top:12px;justify-content:center}
+
+/* 武器/装备卡片 */
+.wgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.wcard{background:var(--bg3);border:2px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;transition:all .2s;font-size:12px}
+.wcard:hover{border-color:var(--cyan);transform:translateY(-1px)}
+.wcard.eq{border-color:var(--green);background:#0a1a10}
+.wcard .wn{font-weight:700;font-size:13px}.wcard .ws{color:var(--dim);font-size:10px;margin:3px 0}.wcard .wp{font-weight:600}
+
+/* 强化 */
+.enhance-card{text-align:center;padding:16px}
+.enhance-card .cur{font-size:26px;font-weight:900;color:var(--yellow)}
+.enhance-card .stones{font-size:13px;color:var(--dim);margin:6px 0}
+
+/* 弹窗 */
+.mo{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:1000;justify-content:center;align-items:center}
+.mo.sh{display:flex}
+.modal{background:var(--bg2);border:2px solid var(--border);border-radius:12px;padding:20px;max-width:460px;width:90%;box-shadow:0 0 40px rgba(0,0,0,.5);text-align:center}
+
+/* 日志 */
+.le{padding:2px 0;font-size:11px}.le.pl{color:var(--cyan)}.le.en{color:var(--red)}.le.cr{font-weight:700;color:var(--yellow)}.le.dl{color:var(--purple)}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .3s ease}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.pulse{animation:pulse .4s ease 3}
+@keyframes critFlash{0%{filter:brightness(2)}100%{filter:brightness(1)}}
+.crit-flash{animation:critFlash .3s ease}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.shake{animation:shake .3s ease}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rareGlow{0%,100%{filter:drop-shadow(0 0 4px rgba(255,68,68,.55))}50%{filter:drop-shadow(0 0 16px rgba(255,68,68,.95))}}
+
+
+.avatar-frame{width:44px;height:44px;border-radius:12px;padding:2px;background:linear-gradient(135deg,#00e5ff,#8a5cff,#ffcc00);box-shadow:0 0 10px rgba(0,229,255,.35);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}.avatar-frame img{display:block;background:#111827}.top-avatar-frame{width:86px;height:86px;border-radius:20px}.top-avatar-frame img{border-radius:18px}
+
+@media(max-width:800px){main{flex-direction:column}#left-rail{width:100%;min-width:unset}#chat-msgs{height:160px}.wgrid,.mgrid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div class="logo"><s1>GiguaT</s1></div>
+  <div class="hdr-btns">
+    <button class="btn btn-sm btn-c" onclick="goBack()" id="btn-back" style="display:none">← 返回</button>
+    <button class="btn btn-sm btn-c" onclick="saveGame()">💾 保存</button>
+    <button class="btn btn-sm btn-r" onclick="showDelete()">🗑️ 删除</button>
+  </div>
+</header>
+<main><div id="left-rail"><div id="sidebar"></div></div><div id="content"></div></main>
+<div id="social-panel"><div id="announce-bar">公告加载中…</div><div id="chat-panel">
+  <div id="chat-head"><span style="font-size:11px;font-weight:700">💬 公屏聊天</span><div><select id="chat-ch" onchange="loadChat()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);font-size:10px;padding:2px"><option value="all">全部</option><option value="world">world</option><option value="arena">arena</option><option value="dungeon">dungeon</option><option value="pot">pot</option><option value="enhance">enhance</option></select></div></div>
+  <div id="chat-msgs"></div>
+  <div id="chat-compose"><input id="chat-input" placeholder="输入…" style="flex:1;min-width:0;background:var(--bg2);color:var(--text);border:1px solid var(--border);padding:5px;font-size:11px;border-radius:4px" onkeydown="if(event.key=='Enter')sendChat()"><button class="btn btn-sm btn-c" onclick="sendChat()" style="font-size:10px">发送</button></div>
+</div></div>
+<div id="log-area"></div>
+</div>
+<div class="mo" id="mo"><div class="modal" id="mc"></div></div>
+
+<script>
+const A='';let player=null,battle=null,enemyData=null,cur='menu';
+let dungeonData=null,dungeonStage=0;
+
+// ═══════════════ 统一页面导航 / 返回上一层 ═══════════════
+// 旧版返回按钮写死 screenMainMenu()，所以任何页面都会直接回主菜单。
+// 现在所有页面进入用 enterPage()，返回用 goBack()，支持真正回上一层。
+const pageStack=[];
+let navPushEnabled=true;
+function setBackVisible(){const b=document.getElementById('btn-back');if(b)b.style.display=(cur==='menu'?'none':'inline-block')}
+function enterPage(pageId){
+  const prev=cur||'menu';
+  if(navPushEnabled && prev && prev!==pageId && pageId!=='menu') pageStack.push(prev);
+  cur=pageId;setBackVisible();
+}
+function resetToMainPage(){cur='menu';pageStack.length=0;setBackVisible()}
+function clearBattleLikeState(){battle=null;enemyData=null;dungeonData=null;dungeonStage=0}
+function goBack(){
+  if(document.getElementById('mo')?.classList.contains('sh')){closeModal();return}
+  if((cur==='battle'||cur==='bot_battle_fight') && battle){
+    if(!confirm('当前对战还未结束，确定退出吗？')) return;
+    clearBattleLikeState();
+  }
+  const prev=pageStack.pop() || 'menu';
+  routeToPage(prev,false);
+}
+function routeToPage(pageId,push=false){
+  const old=navPushEnabled;navPushEnabled=push;
+  try{
+    if(pageId==='menu') return smm();
+    if(pageId==='pvp') return spvp();
+    if(pageId==='inventory') return sinv();
+    if(pageId==='dungeon') return sd();
+    if(pageId==='shop') return ss();
+    if(pageId==='equip_shop') return ses();
+    if(pageId==='enhance') return se();
+    if(pageId==='info') return si();
+    if(pageId==='angel') return sangel();
+    if(pageId==='leaderboard') return slb();
+    if(pageId==='botbattle') return sbotbattle();
+    return smm();
+  }finally{navPushEnabled=old;}
+}
+function normalizeImgSrc(src){
+  if(!src) return '/picture/defaults/default_avatar.png';
+  const s=String(src).replace(/\\/g,'/');
+  if(/^https?:\/\//i.test(s)||s.startsWith('data:')||s.startsWith('/')) return s;
+  return '/'+s.replace(/^\.?\//,'');
+}
+function avatarImg(src,cls='',style=''){
+  const s=normalizeImgSrc(src);
+  return `<img class="${cls}" src="${s}" onerror="this.src='/picture/defaults/default_avatar.png'" style="object-fit:cover;${style}">`;
+}
+function fmtNum(v){return Number(v||0).toLocaleString('zh-CN')}
+function cpBadge(v,label='战斗力'){return `<span class="cp-badge">${label}<b>${fmtNum(v)}</b></span>`}
+function ratingBadge(v){return `<span class="rating-badge">Rating <b>${fmtNum(v||1000)}</b></span>`}
+function qGlow(q){q=Number(q||0);return q>=3?`q-glow-${Math.min(5,q)}`:''}
+function enemyStatsHtml(e){
+  return `<div class="enemy-stat-grid">
+    <div class="sr"><span class="sl">攻击</span><span class="sv" style="color:var(--red)">${fmtNum(e.atk)}</span></div>
+    <div class="sr"><span class="sl">防御</span><span class="sv" style="color:var(--blue)">${fmtNum(e.defense)}</span></div>
+    <div class="sr"><span class="sl">敏捷</span><span class="sv" style="color:var(--green)">${fmtNum(e.agility)}</span></div>
+    <div class="sr"><span class="sl">幸运</span><span class="sv" style="color:var(--purple)">${fmtNum(e.luk)}</span></div>
+    <div class="sr"><span class="sl">伤害</span><span class="sv" style="color:var(--orange)">${fmtNum(e.wdmg)}</span></div>
+    <div class="sr"><span class="sl">武器</span><span class="sv" style="color:var(--yellow)">${e.weapon_name||'无'}+${e.enhance||0}</span></div>
+  </div>`;
+}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+function rewardHtml(r){
+  r=r||{};
+  let lines=[];
+  if(r.coins!==undefined)lines.push(`💰 +${fmtNum(r.coins)}金币`);
+  if(r.exp!==undefined)lines.push(`⭐ +${fmtNum(r.exp)}经验`);
+  if(r.rating_delta!==undefined){
+    const d=Number(r.rating_delta||0);
+    lines.push(`<span style="color:${d>=0?'var(--green)':'var(--red)'}">Rating ${d>=0?'+':''}${d}</span>`);
+  }
+  if(r.leveled)lines.push(`<b style="color:var(--yellow)">升级！Lv.${r.level||player?.level||''}</b>`);
+  (r.items||[]).forEach(it=>lines.push(`${it.icon||'🎁'} ${it.name||'奖励'} ×${fmtNum(it.n||1)}`));
+  if(r.rating)lines.push(`<span style="color:var(--cyan)">当前 Rating ${fmtNum(r.rating)}</span>`);
+  return lines.join('<br>')||'获得少量奖励';
+}
+
+async function api(u,d=null){
+  const o=d?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}:{};
+  return(await fetch(A+u,o)).json()}
+
+function setPlayer(next){
+  if(!next||typeof next!=='object')return player;
+  if(next.maxhp===undefined||next.power===undefined||next.atk===undefined)return player;
+  player={...(player||{}),...next};
+  return player;
+}
+
+async function refreshPlayer(){
+  const r=await api('/api/player_data');
+  setPlayer(r);
+  rsb();
+  return player;
+}
+
+function showModal(t,b,btns){
+  document.getElementById('mc').innerHTML=`<h3>${t}</h3><div style="margin:12px 0">${b}</div><div>${btns}</div>`;
+  document.getElementById('mo').classList.add('sh')}
+function closeModal(){document.getElementById('mo').classList.remove('sh')}
+
+function addLog(m,cls=''){const l=document.getElementById('log-area');l.innerHTML+=`<div class="le ${cls}">[${new Date().toLocaleTimeString()}] ${m}</div>`;l.scrollTop=l.scrollHeight;const es=l.querySelectorAll('.le');if(es.length>60)es[0].remove()}
+
+// ═══════════════ sidebar ═══════════════
+function rsb(){
+  if(!player){document.getElementById('sidebar').innerHTML='';return}
+  const p={name:'未读取存档',gender:'男',level:1,coins:0,hp:1,maxhp:1,mp:0,maxmp:0,rage:0,exp:0,exp_need:1,atk:0,defense:0,agility:0,luk:0,wdmg:0,weapon_name:'无',enhance:0,power:0,crit_rate:0,equip_defense:0,stones_small:0,stones_medium:0,stones_large:0,wins:0,battles:0,dungeon_clears:0,rating:1000,magic_can_fragment:0,weapon_fragments:0,equip_fragments:0,angel_hammer:0,angel_pot:0,...player};
+  player=p;
+  const en=p.equip_names||{};
+  document.getElementById('sidebar').innerHTML=`
+  <div class="fade-in" style="font-size:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      ${p.avatar?`<img src="${p.avatar}" onerror="this.style.display='none'" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);object-fit:cover">`:`<div style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px">${p.gender=='女'?'♀':'♂'}</div>`}
+      <div><b style="color:var(--yellow);font-size:14px">${p.name}</b> ${p.gender=='女'?'♀':'♂'}<br><span style="color:var(--cyan)">Lv.${p.level}</span> 💰${p.coins}<br>${ratingBadge(p.rating)}</div>
+    </div>
+    <div class="sep"></div>
+    <div class="sr"><span class="sl">生命</span></div><div class="bw"><div class="bf" style="width:${p.hp/p.maxhp*100}%;background:linear-gradient(90deg,#ff3355,#ff6644,#00ff66)"></div></div>
+    <div style="font-size:10px;text-align:right;color:var(--dim)">${p.hp||p.maxhp}/${p.maxhp}</div>
+    <div class="sr"><span class="sl">法力</span><span class="sv" style="color:var(--blue)">${p.mp}/${p.maxmp}</span></div>
+    <div class="sr"><span class="sl">怒气</span><span class="sv" style="color:var(--orange)">${p.rage||0}/100</span></div>
+    <div class="sr"><span class="sl">经验</span><span class="sv" style="color:var(--cyan)">${p.exp}/${p.exp_need}</span></div>
+    <div class="sep"></div>
+    <div class="sr"><span class="sl">攻击</span><span class="sv" style="color:var(--red)">${p.atk}</span></div>
+    <div class="sr"><span class="sl">防御</span><span class="sv" style="color:var(--blue)">${p.defense}</span></div>
+    <div class="sr"><span class="sl">敏捷</span><span class="sv" style="color:var(--green)">${p.agility}</span></div>
+    <div class="sr"><span class="sl">幸运</span><span class="sv" style="color:var(--purple)">${p.luk}</span></div>
+    <div class="sr"><span class="sl">伤害</span><span class="sv" style="color:var(--orange)">${p.wdmg}</span></div>
+    <div class="sep"></div>
+    <div style="color:var(--yellow);font-size:11px">⚔️ ${p.weapon_name}+${p.enhance}</div>
+    <div style="margin:5px 0">${cpBadge(p.power)}</div><div style="font-size:10px;color:var(--dim)">暴击${p.crit_rate}%</div>
+    <div class="sep"></div>
+    <div style="font-size:11px">🛡️ 装备:</div>
+    <div style="font-size:10px;color:var(--dim);line-height:1.4">头:${en.helmet||'无'} | 甲:${en.chest||'无'}<br>腿:${en.boots||'无'} | 饰:${en.accessory||'无'}</div>
+    <div style="font-size:10px;color:var(--dim)">装备防御:+${p.equip_defense||0}</div>
+    <div class="sep"></div>
+    <div style="font-size:10px;color:var(--dim)">💎 强化石: 小${p.stones_small} 中${p.stones_medium} 大${p.stones_large}</div>
+    <div style="font-size:10px;color:var(--dim)">🧩 碎片: 魔罐${p.magic_can_fragment} 武器${p.weapon_fragments} 装备${p.equip_fragments}</div>
+    <div style="font-size:10px;color:var(--dim)">🏺 魔罐${p.angel_pot} | 🔨 魔锤${p.angel_hammer}</div>
+    <div style="font-size:10px;color:var(--dim)">胜场${p.wins}/${p.battles} | 副本${p.dungeon_clears}</div>
+  </div>`}
+
+// ═══════════════ 主菜单 ═══════════════
+async function smm(){
+  resetToMainPage();battle=null;enemyData=null;dungeonData=null;dungeonStage=0;
+  const r=await api('/api/state');
+  if(r.has_player)setPlayer(r.player);rsb();
+  const c=document.getElementById('content');
+  if(player){
+    c.innerHTML=`<div class="fade-in"><h2>⚡ GiguaT</h2><p style="color:var(--dim);margin-bottom:12px">欢迎，<b style="color:var(--yellow)">${player.name}</b>！</p>
+    <div class="mgrid">
+      <div class="mi" onclick="sbotbattle()"><div class="ic">⚔️</div><div class="tt">真人对战</div><div class="ds">进入竞技匹配，挑战同服玩家镜像</div></div>
+      <div class="mi" onclick="spvp()"><div class="ic">🐱</div><div class="tt">人机练习</div><div class="ds">挑战Capoo猫猫虫</div></div>
+      <div class="mi" onclick="sd()"><div class="ic">🥝</div><div class="tt">副本挑战</div><div class="ds">探索几维鸟各类副本，收集碎片和魔罐</div></div>
+      <div class="mi" onclick="ss()"><div class="ic">🛒</div><div class="tt">武器商店</div><div class="ds">多系列弹射武器</div></div>
+      <div class="mi" onclick="ses()"><div class="ic">🛡️</div><div class="tt">装备商店</div><div class="ds">头盔胸甲护腿饰品</div></div>
+      <div class="mi" onclick="se()"><div class="ic">🔨</div><div class="tt">强化工坊</div><div class="ds">+0→+12用强化石</div></div>
+      <div class="mi" onclick="sinv()"><div class="ic">🎒</div><div class="tt">我的背包</div><div class="ds">查看装备·切换武器·换装</div></div>
+      <div class="mi" onclick="sangel()"><div class="ic">🏺</div><div class="tt">天使魔罐</div><div class="ds">砸罐开奖·限定武器·稀有材料</div></div>
+      <div class="mi" onclick="slb()"><div class="ic">🏆</div><div class="tt">排行榜</div><div class="ds">战斗力排名·等级排名·30分更新</div></div>
+      <div class="mi" onclick="si()"><div class="ic">📋</div><div class="tt">角色详情</div><div class="ds">查看完整装备属性</div></div>
+    </div></div>`;
+  }else{
+    c.innerHTML=`<div class="fade-in" style="text-align:center;padding:50px 20px">
+      <h2 style="font-size:30px;color:var(--cyan);margin-bottom:16px">⚡ GiguaT</h2>
+      <p style="color:var(--dim);margin-bottom:24px">Capoo猫猫虫 × Kiwi几维鸟 | 装备系统 | 强化石</p>
+      <button class="btn btn-c btn-lg" onclick="sng()" style="margin:8px">🆕 新游戏</button>
+      ${r.has_save?`<button class="btn btn-g btn-lg" onclick="loadGame()" style="margin:8px">📂 读取存档</button>`:''}
+    </div>`}
+  document.getElementById('log-area').innerHTML='<span style="color:var(--dim)">准备就绪…</span>';
+  loadAnnouncements();loadChat();
+}
+async function ngg(){const n=document.getElementById('nn')?.value||'无名弹客';const g=document.getElementById('ng')?.value||'男';
+  const av=document.getElementById('na')?.value||'';const r=await api('/api/new_game',{name:n,gender:g,avatar:av});
+  if(r.ok){setPlayer(r.player);closeModal();rsb();smm();addLog('✨ 角色创建成功！')}}
+function sng(){showModal('🆕 创建角色',
+  `<div style="text-align:left">
+  <p>名字: <input id="nn" value="无名弹客" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text)"></p>
+  <p>性别: <select id="ng" style="padding:6px;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px"><option>男</option><option>女</option></select></p>
+  <p>头像URL(可选): <input id="na" placeholder="粘贴图片链接…" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--text)"></p>
+  <p style="font-size:11px;color:var(--dim)">也可以后续在游戏中粘贴base64头像</p>
+  </div>`,
+  '<button class="btn btn-c" onclick="ngg()">开始冒险</button> <button class="btn btn-r btn-sm" onclick="closeModal()">取消</button>')}
+async function loadGame(){const r=await api('/api/load');if(r.ok){setPlayer(r.player);rsb();smm();addLog('📂 读取存档成功！')}else alert('无存档')}
+async function saveGame(){await api('/api/save');addLog('💾 已保存')}
+function showDelete(){showModal('⚠️ 删除','确认删除所有数据？','<button class="btn btn-r" onclick="delS()">确认</button> <button class="btn btn-sm" onclick="closeModal()">取消</button>')}
+async function delS(){
+  await api('/api/delete');
+  player=null;clearBattleLikeState();closeModal();rsb();
+  document.getElementById('log-area').innerHTML='';
+  addLog('🗑️ 存档已清除');
+  smm();
+}
+
+// ═══════════════ 人机对战 ═══════════════
+async function spvp(){enterPage('pvp');
+  const r=await api('/api/pvp_difficulties');
+  const ds=r.difficulties||[];const lv=r.player_level||player?.level||1;
+  let h=`<div class="fade-in"><h2>🐱 人机练习 — 10档Capoo试炼</h2>
+  <p style="color:var(--dim);margin-bottom:10px">当前 Lv.${lv}，推荐挑战带有“推荐”的档位。等级不足的档位无法进入。</p><div class="wgrid">`;
+  ds.forEach((d,i)=>{
+    const locked=!d.unlocked;const rec=d.recommended;
+    h+=`<div class="wcard" style="${locked?'opacity:.45;cursor:not-allowed':'cursor:pointer'};border-color:${rec?'var(--yellow)':'var(--border)'}" ${locked?'':`onclick="spvpb('${d.id}')"`}>
+      <div class="wn" style="color:${rec?'var(--yellow)':'var(--cyan)'}">${i+1}. ${d.name} ${rec?'<span style="font-size:10px;color:var(--green)">推荐</span>':''}</div>
+      <div class="ws">入场等级 Lv.${d.lv}+ | 敌人强度 ×${d.scale}</div>
+      <div class="ws">奖励: 💰${d.coins[0]}-${d.coins[1]} | ⭐${d.exp[0]}-${d.exp[1]} | 🧩${d.frag[0]}-${d.frag[1]}</div>
+      <div class="wp" style="color:${locked?'var(--red)':'var(--green)'}">${locked?'🔒 等级不足':'⚔️ 可挑战'}</div>
+    </div>`;
+  });
+  document.getElementById('content').innerHTML=h+'</div></div>'}
+async function spvpb(diff){const r=await api('/api/start_battle',{difficulty:diff});
+  if(!r.ok){alert(r.msg||'暂时无法进入该难度');return}enemyData=r.enemy;battle=r.battle;player.hp=r.battle.player_hp;player.rage=r.battle.player_rage;
+  enterPage('battle');rsb();rbs();addLog(`🐱 对战: ${enemyData.name} Lv.${enemyData.level} | ${enemyData.tendency||''}`)
+  if(enemyData.enter_line)setTimeout(()=>addLog(`💬 ${enemyData.enter_line}`,'dl'),500)}
+
+// ═══════════════ 战斗 ═══════════════
+function rbs(){
+  if(!battle||!enemyData)return;const c=document.getElementById('content');
+  const isBot=battle.battle_type==='bot_pvp'||enemyData.type==='bot';
+  const botAvatar=isBot?normalizeImgSrc(enemyData.avatar):'';
+  const gifPath=(!isBot&&enemyData.gif)?`/picture/${enemyData.type=='kiwi'?'kiwi':'enemy'}/${enemyData.gif}`:'';
+  const oppVisual=isBot?
+    `<div class="enemy-gif-wrap" id="enemy-visual"><div class="avatar-frame top-avatar-frame" style="margin:0 auto 6px">${avatarImg(botAvatar,'','width:86px;height:86px;border-radius:18px')}</div><div class="enemy-name" style="color:var(--red)">${enemyData.name} Lv.${enemyData.level}</div><div style="margin:5px 0">${cpBadge(enemyData.combat_power||0)} ${ratingBadge(enemyData.rating||1000)}</div>${enemyStatsHtml(enemyData)}<div style="font-size:10px;color:var(--dim);text-align:center">竞技玩家</div><div id="dialogue" class="dialogue-bubble" style="display:none"></div></div>`:
+    (gifPath?`<div class="enemy-gif-wrap" id="enemy-visual"><img src="${gifPath}" alt="${enemyData.name}" id="enemy-gif"><div class="enemy-name" style="color:var(--red)">${enemyData.name} Lv.${enemyData.level}</div>${enemyStatsHtml(enemyData)}<div id="dialogue" class="dialogue-bubble" style="display:none"></div></div>`:
+    `<div style="text-align:center;color:var(--dim);margin:10px 0">${enemyData.name} Lv.${enemyData.level}${enemyStatsHtml(enemyData)}</div>`);
+  c.innerHTML=`<div class="fade-in"><h2>⚔️ ${isBot?'真人对战':'战斗'}</h2>
+  <div class="battle-top">
+    <div class="battle-vs">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--green)">🟢 ${player.name} ${cpBadge(player.power||0)}</span>
+        <span style="color:var(--red)">🔴 ${enemyData.name}</span></div>
+      <div style="font-size:12px;margin:3px 0"><span style="color:var(--dim)">生命 ${battle.player_hp}/${player.maxhp}</span><span style="float:right;color:var(--dim)">生命 ${battle.enemy_hp}/${enemyData.maxhp}</span></div>
+    </div></div>
+  ${oppVisual}
+  <div id="battle-canvas-wrap"><canvas id="battle-canvas" width="660" height="100"></canvas></div>
+  <div style="text-align:center;font-size:13px;margin:4px 0">距离:<b style="color:var(--cyan)">${battle.distance}m</b> | 风力:<b style="color:${battle.wind>0?'var(--cyan)':'var(--purple)'}">${battle.wind>0?'→':battle.wind<0?'←':''} ${Math.abs(battle.wind)}</b> | 回合:<b>${battle.turn||1}</b></div>
+  <div style="text-align:center;color:var(--dim);font-size:11px">${isBot?'⚔️ 真人竞技镜像会根据Rating成长':'⚡ AI自动计算最优弹道'}</div>
+  <div class="action-row"><button class="btn btn-c btn-lg" onclick="pa()" id="btn-fire">🚀 发射！</button><button class="btn btn-o btn-lg" onclick="pul()" id="btn-ult" disabled>💢 必杀技(怒气${player.rage||0}/100)</button></div></div>`;
+  setTimeout(dbf,100);uub()}
+
+
+function dbf(){const cv=document.getElementById('battle-canvas');if(!cv||!battle)return;
+  const ctx=cv.getContext('2d');const w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0a0a14';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#2a2a40';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,h-25);ctx.lineTo(w,h-25);ctx.stroke();
+  const px=80,ex=80+Math.min(500,battle.distance*3.5);
+  ctx.fillStyle='#00ff66';ctx.beginPath();ctx.arc(px,h-32,12,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 10px "Microsoft YaHei"';ctx.textAlign='center';ctx.fillText('你',px,h-48);
+  ctx.fillStyle='#ff3355';ctx.beginPath();ctx.arc(ex,h-32,12,0,Math.PI*2);ctx.fill();ctx.fillText(enemyData.name||'敌',ex,h-48);
+  ctx.strokeStyle='#333355';ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(px+12,h-32);ctx.lineTo(ex-12,h-32);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#00e5ff';ctx.font='11px "Microsoft YaHei"';ctx.fillText(battle.distance+'m',(px+ex)/2,h-36);
+  if(battle.wind!==0){const cx=(px+ex)/2;ctx.fillStyle=battle.wind>0?'#00e5ff':'#cc44ff';ctx.fillText((battle.wind>0?'→→':'←←')+Math.abs(battle.wind),cx-25,h-62)}
+  const hpw=50;const pr=battle.player_hp/player.maxhp;ctx.fillStyle='#1a1a30';ctx.fillRect(px-hpw/2,h-70,hpw,6);ctx.fillStyle=pr>.6?'#00ff66':(pr>.3?'#ffcc00':'#ff3355');ctx.fillRect(px-hpw/2,h-70,hpw*pr,6);
+  const er=battle.enemy_hp/enemyData.maxhp;ctx.fillStyle='#1a1a30';ctx.fillRect(ex-hpw/2,h-70,hpw,6);ctx.fillStyle=er>.6?'#00ff66':(er>.3?'#ffcc00':'#ff3355');ctx.fillRect(ex-hpw/2,h-70,hpw*er,6)}
+
+function animShot(){const cv=document.getElementById('battle-canvas');if(!cv||!battle)return;
+  const ctx=cv.getContext('2d');const w=cv.width,h=cv.height;const px=80,ex=80+Math.min(500,battle.distance*3.5);let t=0;
+  function f(){t+=.04;if(t>1){dbf();return}dbf();const x=px+(ex-px)*t;const y=h-32-50*Math.sin(t*Math.PI);ctx.fillStyle='#ffcc00';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,200,0,.3)';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();requestAnimationFrame(f)}requestAnimationFrame(f)}
+
+function uub(){const b=document.getElementById('btn-ult');if(!b)return;b.textContent=`💢 必杀技(怒气${player.rage||0}/100)`;
+  if((player.rage||0)>=100){b.style.opacity='1';b.style.cursor='pointer';b.disabled=false;b.classList.add('pulse')}else{b.style.opacity='.5';b.style.cursor='not-allowed';b.disabled=true;b.classList.remove('pulse')}}
+
+function showDialogue(msg){const d=document.getElementById('dialogue');if(!d)return;d.textContent=msg;d.style.display='inline-block';setTimeout(()=>d.style.display='none',3000)}
+
+async function pa(){console.log('[PA] playerAttack called');if(!battle)return;
+  const btn=document.getElementById('btn-fire');if(!btn)return;
+  btn.disabled=true;btn.textContent='⚡ AI计算中…';
+  try{
+    const r=await api((battle&&battle.battle_type==='bot_pvp')?'/api/bot_battle/player_act':'/api/player_act',{auto:true});console.log('[PA] response:',r);
+    if(r.over){console.log('[PA] battle over:',r.over);eb(r);return}
+    battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage;player.hp=r.player_hp;rsb();rbs();
+    if(r.auto_angle)addLog(`⚡ AI: ${r.auto_formula||'自由'} 角度${r.auto_angle}° 力度${r.auto_power} | ${r.msg}`);
+    else addLog(r.msg,(r.log||[]).slice(-1)[0]?.crit?'cr':'pl');
+    if(r.enemy_line)showDialogue(r.enemy_line);
+    const isCrit=(r.log||[]).slice(-1)[0]?.crit||false;
+    animShotEx(r.dmg||0,isCrit);
+    // 禁用按钮，显示AI回合倒计时
+    const fb=document.getElementById('btn-fire');if(fb){fb.disabled=true;fb.textContent='⏳ 敌人回合…';fb.style.opacity='0.6'}
+    console.log('[PA] scheduling at() in 1200ms');setTimeout(at,1200);
+  }catch(e){console.error('[PA] ERROR:',e);addLog('❌ 攻击出错: '+e.message,'en');
+    const fb=document.getElementById('btn-fire');if(fb){fb.disabled=false;fb.textContent='🚀 发射！';fb.style.opacity='1'}
+  }}
+
+async function at(){console.log('[AT] ai_turn called | battle='+!!battle+' pHP='+battle?.player_hp+' eHP='+battle?.enemy_hp);
+  if(!battle||battle.player_hp<=0||battle.enemy_hp<=0){console.log('[AT] skipped');return}
+  addLog('⏳ 对手回合…');console.log('[AT] sending POST /api/ai_act');
+  try{
+    const r=await api((battle&&battle.battle_type==='bot_pvp')?'/api/bot_battle/ai_act':'/api/ai_act',{});console.log('[AT] ai_act response:',r);
+    if(r.over){console.log('[AT] battle over:',r.over);eb(r);return}
+    battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;player.hp=r.player_hp;rsb();rbs();
+    if(r.enemy_line)showDialogue(r.enemy_line);
+    addLog('🔴 '+r.msg,(r.log||[]).slice(-1)[0]?.crit?'cr':'en');
+    document.getElementById('content').classList.add('shake');
+    setTimeout(()=>document.getElementById('content').classList.remove('shake'),300);
+    // 恢复按钮
+    const fb=document.getElementById('btn-fire');if(fb){fb.disabled=false;fb.textContent='🚀 发射！';fb.style.opacity='1'}
+  }catch(e){console.error('[AT] ERROR:',e);addLog('❌ 敌人回合出错: '+e.message,'en');
+    const fb=document.getElementById('btn-fire');if(fb){fb.disabled=false;fb.textContent='🚀 发射！';fb.style.opacity='1'}
+  }}
+
+async function pul(){if(player.rage<100)return;const r=await api((battle&&battle.battle_type==='bot_pvp')?'/api/bot_battle/player_act':'/api/player_act',{ultimate:true});
+  if(r.over){eb(r);return}
+  battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage;player.hp=r.player_hp;rsb();rbs();
+  addLog(r.msg,'cr');document.getElementById('content').classList.add('crit-flash');setTimeout(()=>document.getElementById('content').classList.remove('crit-flash'),300);setTimeout(at,1500)}
+
+function markBattleOver(over){
+  const c=document.getElementById('content');
+  if(over==='victory'){
+    const e=document.getElementById('enemy-visual')||document.getElementById('enemy-gif');
+    if(e)e.classList.add('ko-gray');
+  }
+  if(c){c.classList.add('shake');setTimeout(()=>c.classList.remove('shake'),350)}
+}
+async function eb(r){
+  markBattleOver(r.over);
+  await sleep(850);
+  battle=null;enemyData=null;
+  await refreshPlayer();
+  saveGame();rsb();
+  if(r.over==='victory'){
+    if(dungeonData){
+      api('/api/dungeon_drops',{dungeon_id:dungeonData.id}).then(dr=>{
+        setPlayer(dr.player);rsb();
+        showCardFlip(dr);
+      });
+    }else{
+      showModal('🏆 胜利！',`${r.enemy_line||'对手倒下了！'}<br>${rewardHtml(r.reward)}`,
+        '<button class="btn btn-c" onclick="closeModal();smm()">继续</button>');
+    }
+    addLog('🏆 胜利！')
+  }else{
+    showModal('💀 失败…',`${r.enemy_line||'被击败了…'}<br>${rewardHtml(r.reward)}`,
+      '<button class="btn btn-r" onclick="closeModal();smm()">继续</button>');addLog('💀 失败…')
+  }}
+
+// ═══════════════ 翻卡结算UI ═══════════════
+let flippedCardCount=0;
+function showCardFlip(dr){
+  flippedCardCount=0;
+  const cards=(dr.cards||[]).slice(0,5);const cr=dr.coins_reward||0;const er=dr.exp_reward||0;
+  let html=`<div class="fade-in" style="text-align:center">
+    <h2 style="color:var(--yellow)">🏆 副本通关！</h2>
+    <p style="color:var(--dim)">💰 +${cr}金币 | ⭐ +${er}经验</p>
+    <p style="font-size:12px;color:var(--purple);margin:8px 0">点击卡牌翻面查看奖励</p>
+    <div class="card-grid" style="display:flex;gap:10px;justify-content:center;flex-wrap:nowrap;overflow-x:auto;margin:12px 0">`;
+  cards.forEach((c,i)=>{
+    const rarityColors={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'};
+    const rarityGlow={common:'none',rare:'0 0 12px #00ff66',epic:'0 0 20px #cc44ff',legend:'0 0 30px #ff8800',mythic:'0 0 40px #ff3333,0 0 80px #ff0000'};
+    const rc=rarityColors[c.rarity]||'#888';const rg=rarityGlow[c.rarity]||'none';
+    html+=`<div class="card-flip" id="card-${i}" onclick="flipCard(${i})" style="width:100px;height:140px;perspective:600px;cursor:pointer">
+      <div class="card-inner" id="card-inner-${i}" style="position:relative;width:100%;height:100%;transition:transform 0.6s;transform-style:preserve-3d">
+        <div class="card-front" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;background:linear-gradient(135deg,#1a1a2e,#2a2a40);border:2px solid ${rc};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:${rg}">❓</div>
+        <div class="card-back" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;transform:rotateY(180deg);background:linear-gradient(135deg,#12122a,#1a1a3e);border:2px solid ${rc};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;padding:6px;text-align:center;box-shadow:${rg}">
+          <div style="font-size:${c.rarity==='mythic'?'28px':'20px'}">${c.icon||'🎁'}</div>
+          <div style="color:${rc};font-weight:700;margin:4px 0">${c.name||'材料'}</div>
+          ${c.n?`<div style="color:var(--dim)">×${c.n}</div>`:''}
+          ${c.quality_tag?`<div style="font-size:10px;color:${rc}">${c.quality_tag}</div>`:''}
+          ${c.type==='weapon'||c.type==='equip'?`<button class="btn btn-sm btn-c" onclick="event.stopPropagation();equipDrop('${c.id}','${c.type}')" style="margin-top:4px;font-size:10px">装备</button>`:''}
+        </div>
+      </div>
+</div></div>`;
+  });
+  html+=`</div>
+    <p id="flip-tip" style="font-size:10px;color:var(--dim)">已翻 0/5 张，翻开的装备可立即装备</p>
+    <button class="btn btn-c" onclick="closeModal();checkDungeonNext()">继续</button>
+    <button class="btn btn-sm" onclick="flipAllCards()" style="margin-left:8px">全部翻开</button>
+  </div>`;
+  document.getElementById('mc').innerHTML=html;
+  document.getElementById('mo').classList.add('sh');
+}
+
+function flipCard(i){
+  const inner=document.getElementById('card-inner-'+i);
+  const card=document.getElementById('card-'+i);
+  if(!inner||!card)return;
+  if(card.dataset.flipped==='1')return;
+  card.dataset.flipped='1';flippedCardCount++;
+  inner.style.transform='rotateY(180deg)';
+  // 翻开后加脉冲特效
+  card.style.animation='cardPulse 0.6s ease';
+  const tip=document.getElementById('flip-tip');if(tip)tip.textContent=`已翻 ${flippedCardCount}/5 张`;
+}
+
+function flipAllCards(){
+  for(let i=0;i<5;i++)flipCard(i);
+}
+
+// 卡牌呼吸动画
+const cardPulseStyle=document.createElement('style');
+cardPulseStyle.textContent='@keyframes cardPulse{0%,100%{box-shadow:0 0 20px rgba(255,100,0,.5)}50%{box-shadow:0 0 50px rgba(255,50,0,.9),0 0 90px rgba(255,0,0,.5)}}';
+document.head.appendChild(cardPulseStyle);
+
+// ═══════════════ 背包系统 ═══════════════
+async function sinv(){enterPage('inventory');
+  const r=await api('/api/inventory');
+  const cr=await api('/api/craftables');
+  let h='<div class="fade-in"><h2>🎒 我的背包</h2>';
+  // 武器区
+  h+='<h3>⚔️ 武器 ('+(r.weapons||[]).length+')</h3><div class="wgrid">';
+  (r.weapons||[]).forEach(w=>{
+    const eq=w.equipped;
+    h+=`<div class="wcard ${eq?'eq':''}" style="cursor:pointer;border-color:${w.color}40" onclick="${eq?'':`switchWeapon('${w.id}')`}">
+      <div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.icon||'⚔️'} ${w.quality_tag||''} ${w.name}</div>
+      ${eq?'<div style="color:var(--green);font-size:10px">✅ 当前装备</div>':'<button class="btn btn-sm btn-c" style="margin-top:4px">装备</button>'}
+    </div>`;
+  });
+  h+='</div>';
+  h+=`<h3>🧩 碎片合成</h3><div class="card"><div style="font-size:11px;color:var(--dim);margin-bottom:6px">武器碎片 ${cr.weapon_fragments||0} | 装备碎片 ${cr.equip_fragments||0}</div><div class="wgrid">`;
+  (cr.weapons||[]).slice(0,8).forEach(w=>{
+    h+=`<div class="wcard" style="border-color:${w.color}40;${w.owned?'opacity:.55':''}">
+      <div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.quality_tag} ${w.icon||'⚔️'} ${w.name}</div>
+      <div class="ws">需要武器碎片 ${w.need}</div>
+      <button class="btn btn-sm ${w.can&&!w.owned?'btn-c':''}" onclick="craftWeapon('${w.id}')" ${(!w.can||w.owned)?'disabled':''}>${w.owned?'已拥有':'合成'}</button>
+    </div>`;
+  });
+  (cr.equipment||[]).slice(0,8).forEach(e=>{
+    h+=`<div class="wcard" style="border-color:${e.color}40;${e.owned?'opacity:.55':''}">
+      <div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag} ${e.name}</div>
+      <div class="ws">${e.slot} | 需要装备碎片 ${e.need}</div>
+      <button class="btn btn-sm ${e.can&&!e.owned?'btn-c':''}" onclick="craftEquip('${e.id}')" ${(!e.can||e.owned)?'disabled':''}>${e.owned?'已拥有':'合成'}</button>
+    </div>`;
+  });
+  h+='</div></div>';
+  // 装备区
+  h+='<h3>🛡️ 装备 ('+(r.equipment||[]).length+')</h3><div class="wgrid">';
+  (r.equipment||[]).forEach(e=>{
+    const eq=e.equipped;
+    h+=`<div class="wcard ${eq?'eq':''}" style="cursor:pointer;border-color:${e.color}40" onclick="${eq?'':`switchEquip('${e.id}')`}">
+      <div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag||''} ${e.name} (${e.slot})</div>
+      ${eq?'<div style="color:var(--green);font-size:10px">✅ 已装备</div>':'<button class="btn btn-sm btn-c" style="margin-top:4px">装备</button>'}
+    </div>`;
+  });
+  h+='</div></div>';
+  document.getElementById('content').innerHTML=h}
+
+async function switchWeapon(wid){
+  const r=await api('/api/switch_weapon',{weapon_id:wid});
+  if(r.ok){setPlayer(r.player);rsb();sinv();addLog('✅ '+r.msg)}else alert(r.msg)}
+async function switchEquip(eid){
+  const r=await api('/api/switch_equip',{equip_id:eid});
+  if(r.ok){setPlayer(r.player);rsb();sinv();addLog('✅ '+r.msg)}else alert(r.msg)}
+async function craftWeapon(wid){const r=await api('/api/craft_weapon',{weapon_id:wid});if(r.ok){setPlayer(r.player);rsb();sinv();addLog('🧩 '+r.msg)}else alert(r.msg)}
+async function craftEquip(eid){const r=await api('/api/craft_equip',{equip_id:eid});if(r.ok){setPlayer(r.player);rsb();sinv();addLog('🧩 '+r.msg)}else alert(r.msg)}
+
+// ═══════════════ 增强攻击动画 ═══════════════
+function showDamage(x,y,dmg,crit){
+  const el=document.createElement('div');el.className='dmg-pop';
+  el.textContent=(crit?'💥':'')+'-'+dmg;
+  el.style.cssText=`position:fixed;left:${x}px;top:${y}px;color:${crit?'#ff4444':'#ffaa00'};font-size:${crit?'28px':'20px'};font-weight:900;pointer-events:none;z-index:999;animation:dmgUp 1.2s ease forwards;text-shadow:0 0 10px ${crit?'#ff0000':'#ff8800'}`;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(),1200);}
+const dmgStyle=document.createElement('style');
+dmgStyle.textContent='@keyframes dmgUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{opacity:1;transform:translateY(-40px) scale(1.3)}100%{opacity:0;transform:translateY(-70px) scale(0.8)}}';
+document.head.appendChild(dmgStyle);
+
+function animShotEx(dmg,crit){
+  const cv=document.getElementById('battle-canvas');if(!cv||!battle)return;
+  const ctx=cv.getContext('2d');const w=cv.width,h=cv.height;
+  const px=80,ex=80+Math.min(500,battle.distance*3.5);let t=0;
+  // 蓄力闪光
+  ctx.fillStyle='rgba(255,200,0,.2)';ctx.beginPath();ctx.arc(px,h-32,20,0,Math.PI*2);ctx.fill();
+  function f(){
+    t+=.03;if(t>1){
+      dbf();
+      // 伤害数字
+      const rect=cv.getBoundingClientRect();
+      showDamage(rect.left+ex,rect.top+h-80,dmg,crit);
+      if(crit){document.getElementById('content').classList.add('crit-flash');setTimeout(()=>document.getElementById('content').classList.remove('crit-flash'),400)}
+      return}
+    dbf();
+    // 飞行弹道+尾迹
+    const x=px+(ex-px)*t;const y=h-32-50*Math.sin(t*Math.PI);
+    ctx.fillStyle='#ffcc00';ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,200,0,.3)';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();
+    // 爆炸终点
+    if(t>.85){
+      ctx.fillStyle='rgba(255,100,0,.5)';ctx.beginPath();ctx.arc(ex,h-32,12,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(255,50,0,.3)';ctx.beginPath();ctx.arc(ex,h-32,20,0,Math.PI*2);ctx.fill();
+    }
+    requestAnimationFrame(f);
+  }
+  requestAnimationFrame(f);
+}
+// ═══════════════ equipDrop (保持兼容) ═══════════════
+async function equipDrop(did,type){
+  if(type=='weapon')await api('/api/equip_drop',{weapon_id:did});
+  else await api('/api/equip_drop',{equip_id:did});
+  await refreshPlayer();addLog('✅ 已装备！')
+}
+function checkDungeonNext(){
+  // 简化：回到主菜单(完整版需要逐关推进)
+  dungeonData=null;smm();
+}
+
+// ═══════════════ 副本 ═══════════════
+async function sd(){enterPage('dungeon');
+  const r=await api('/api/dungeons');let h='<div class="fade-in"><h2>🥝 几维鸟副本群</h2><p style="color:var(--dim);font-size:11px;margin-bottom:8px">挑战不同生态的几维鸟副本，获取魔罐、魔锤、武器碎片、装备碎片和高阶掉落。</p>';
+  r.dungeons.forEach(d=>{
+    let dropHtml='';
+    if(d.drops&&d.drops.length>0){
+      dropHtml='<div style="font-size:10px;color:var(--purple);margin-top:4px">🎁 可能掉落: ';
+      d.drops.forEach(dp=>{dropHtml+=`<span title="${dp.label}">${dp.label}(${(dp.rate*100).toFixed(1)}%) </span>`});
+      dropHtml+='</div>';
+    }
+    h+=`<div class="card" style="cursor:pointer;${d.unlocked?'':'opacity:.4'}" ${d.unlocked?`onclick="sdd('${d.id}')"`:''}>
+      <b>${d.name}</b> ${d.unlocked?'':'🔒 Lv.'+d.lv}
+      <div style="font-size:11px;color:var(--dim)">${d.desc} | ${d.stages}关 | 💰${d.rewards.coins[0]}-${d.rewards.coins[1]} | ⭐${d.rewards.exp[0]}-${d.rewards.exp[1]}</div>
+      ${dropHtml}</div>`;
+  });
+  document.getElementById('content').innerHTML=h+'</div>'}
+
+async function sdd(did){const r=await api('/api/start_dungeon',{dungeon_id:did});
+  if(!r.ok){alert(r.msg);return}
+  enemyData=r.enemy;battle=r.battle;dungeonData=r.dungeon;dungeonStage=r.current_stage;player.hp=player.maxhp;player.rage=0;
+  enterPage('battle');rsb();rbs();addLog(`🥝 副本: ${dungeonData.name} — ${dungeonData.stages[dungeonStage].name}`)
+  if(enemyData.enter_line)setTimeout(()=>addLog(`💬 ${enemyData.enter_line}`,'dl'),500)}
+
+// ═══════════════ 武器商店 ═══════════════
+async function ss(){enterPage('shop');
+  const r=await api('/api/weapons');rsb();
+  let h='<div class="fade-in"><h2>🛒 武器商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币 | 当前:<b style="color:var(--yellow)">'+((player&&player.weapon_name)||'无')+'+'+((player&&player.enhance)||0)+'</b></p><p style="font-size:11px;color:var(--purple)">金币商店只卖到极·武器：真·价格×10，极·价格×100；神器·武器只能用70片武器碎片兑换，或通过副本/天使魔罐获取。</p><div class="wgrid">';
+  r.weapons.forEach(w=>{const eq=w.id===r.equipped;
+    h+=`<div class="wcard ${eq?'eq':''}" onclick="${eq?'':`bw('${w.id}')`}" style="border-color:${w.color}40"><div class="wn ${qGlow(w.quality)}" style="color:${w.color}">${w.quality_tag} ${w.name}</div><div class="ws">伤害${w.base_damage} 攻击${w.atk} 防御${w.defense} 敏捷${w.agility} 幸运${w.luck}</div><div class="wp" style="color:${r.coins>=w.price&&r.level>=w.level_req?'var(--green)':'var(--red)'}">${fmtNum(w.price)}💰 Lv.${w.level_req}+ ${eq?'✅':''}</div></div>`});
+  document.getElementById('content').innerHTML=h+'</div></div>'}
+async function bw(wid){const r=await api('/api/buy_weapon',{weapon_id:wid});if(r.ok){setPlayer(r.player);rsb();ss();addLog('✅ '+r.msg)}else alert(r.msg)}
+
+// ═══════════════ 装备商店 ═══════════════
+async function ses(){enterPage('equip_shop');
+  const r=await api('/api/equipments');rsb();const eq=r.equipped||{};
+  let h='<div class="fade-in"><h2>🛡️ 装备商店</h2><p style="color:var(--dim)">💰 '+r.coins+'金币</p><p style="font-size:11px;color:var(--purple)">金币最高可购买到极·装备：真·价格×10，极·价格×100；神器·装备只能用70片装备碎片兑换，或通过副本/魔罐获取。</p>'
+  const slots={'头盔':'已装备:'+(eq.helmet||'无'),'胸甲':'已装备:'+(eq.chest||'无'),'护腿':'已装备:'+(eq.boots||'无'),'饰品':'已装备:'+(eq.accessory||'无')};
+  for(const[sn,sv]of Object.entries(slots)){h+=`<h3>${sn}</h3><p style="font-size:11px;color:var(--dim)">${sv}</p><div class="wgrid">`;
+    r.equipments.filter(e=>e.slot==sn).forEach(e=>{const ed=eq.helmet==e.id||eq.chest==e.id||eq.boots==e.id||eq.accessory==e.id;
+      h+=`<div class="wcard ${ed?'eq':''}" onclick="${ed?'':`be('${e.id}')`}" style="border-color:${e.color}40"><div class="wn ${qGlow(e.quality)}" style="color:${e.color}">${e.quality_tag} ${e.name}</div><div class="ws">防${e.defense} HP+${e.hp_bonus} 攻+${e.atk_bonus} 敏+${e.agi_bonus} 运+${e.luk_bonus}</div><div class="wp" style="color:${r.coins>=e.price&&r.level>=e.level_req?'var(--green)':'var(--red)'}">${fmtNum(e.price)}💰 Lv.${e.level_req}+ ${ed?'✅':''}</div></div>`});
+    h+='</div>'}
+  document.getElementById('content').innerHTML=h+'</div>'}
+async function be(eid){const r=await api('/api/buy_equip',{equip_id:eid});if(r.ok){setPlayer(r.player);rsb();ses();addLog('✅ '+r.msg)}else alert(r.msg)}
+
+// ═══════════════ 强化工坊 (new) ═══════════════
+let enhance_stones={small:0,medium:0,large:0};
+async function se(){enterPage('enhance');
+  const r=await api('/api/enhance/info');enhance_stones={small:0,medium:0,large:0};
+  renderEnhance(r)}
+function renderEnhance(info){
+  const lv=info.level||0;const luck=info.luck||0;const rate=info.final_rate||0;
+  const cost=info.gold_cost||0;const have=info.gold_have||0;
+  const st=info.stones||{};
+  const ss=enhance_stones.small||0;const sm=enhance_stones.medium||0;const sl=enhance_stones.large||0;
+  const stoneRaw=(ss*12+sm*30+sl*70);const stoneBonus=+(stoneRaw*(info.level_factor||1)).toFixed(2);
+  const newRate=+Math.min(95,stoneBonus+(info.luck_bonus||0)).toFixed(2);
+  let h='<div class="fade-in"><h2>🔨 锻造台</h2>';
+  h+=`<div style="display:flex;gap:15px;flex-wrap:wrap">
+    <div class="card" style="flex:1;min-width:180px;text-align:center">
+      <div style="font-size:40px">⚔️</div>
+      <div style="font-weight:700;color:var(--yellow);font-size:16px">${info.weapon_name||'武器'}</div>
+      <div style="font-size:28px;font-weight:900;color:var(--cyan);margin:6px 0">+${lv}</div>
+      <div style="font-size:11px;color:var(--dim)">当前伤害: ${info.cur_dmg||0}</div>
+      <div style="font-size:11px;color:var(--dim)">幸运值: ${luck}</div>
+    </div>
+    <div class="card" style="flex:2;min-width:280px">
+      <div style="display:flex;justify-content:space-between;font-size:13px">
+        <span>→ +${lv+1}</span><span style="color:var(--green)">伤害: ${info.preview_dmg||0}</span>
+      </div>
+      <div class="sep"></div>
+      <div style="font-size:12px;color:var(--dim);margin:4px 0">基础成功率: <b>${info.base_rate||0}%</b> + 石头: <b style="color:var(--cyan)">+${stoneBonus}%</b> + 幸运: <b style="color:var(--purple)">+${info.luck_bonus||0}%</b></div>
+      <div style="font-size:16px;font-weight:900;color:${newRate>70?'var(--green)':newRate>40?'var(--yellow)':'var(--red)'}">最终成功率: ${newRate}%</div>
+      <div style="font-size:12px;margin:6px 0">💰 消耗: <b style="color:${have>=cost?'var(--green)':'var(--red)'}">${cost}金币</b></div>
+      <div class="sep"></div>
+      <div style="font-size:11px;color:var(--dim)">选择强化石:</div>
+      <div style="display:flex;gap:8px;margin:6px 0;flex-wrap:wrap">
+        ${stoneRow('small','小强化石 +1%',st.small)}
+        ${stoneRow('medium','中强化石 +3%',st.medium)}
+        ${stoneRow('large','大强化石 +8%',st.large)}
+      </div>
+      <button class="btn btn-purple btn-lg" onclick="doEnhanceNew()" id="btn-enhance" style="width:100%;margin-top:8px" ${(have<cost||(ss+sm+sl)==0&&newRate<30)?'disabled':''}>🔨 开始锻造！</button>
+      ${lv>20?`<div style="font-size:10px;color:var(--red);margin-top:4px">⚠️ 高等级强化，建议投入更多强化石</div>`:''}
+    </div>
+  </div></div>`;
+  document.getElementById('content').innerHTML=h}
+function stoneRow(key,label,max){
+  const cur=enhance_stones[key]||0;
+  return `<div class="card" style="text-align:center;min-width:90px">
+    <div style="font-size:11px">${label}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:4px 0">
+      <button class="btn btn-sm" onclick="adjStone('${key}',-1)" ${cur<=0?'disabled':''}>−</button>
+      <span style="font-weight:700;min-width:20px">${cur}</span>
+      <button class="btn btn-sm" onclick="adjStone('${key}',1)" ${cur>=max?'disabled':''}>+</button>
+    </div>
+    <div style="font-size:10px;color:var(--dim)">拥有: ${max}</div>
+    <button class="btn btn-sm" onclick="enhance_stones['${key}']=Math.min(max,cur+Math.floor(max/2));refreshEnhance()" style="font-size:9px">最大</button>
+  </div>`}
+function adjStone(key,delta){
+  if(delta>0)enhance_stones[key]=(enhance_stones[key]||0)+1;
+  else enhance_stones[key]=Math.max(0,(enhance_stones[key]||0)-1);
+  refreshEnhance()}
+async function refreshEnhance(){
+  const r=await api('/api/enhance/info');renderEnhance(r)}
+async function doEnhanceNew(){
+  const btn=document.getElementById('btn-enhance');if(!btn)return;
+  btn.disabled=true;btn.textContent='⚒️ 锻造中…';
+  const r=await api('/api/enhance',enhance_stones);
+  btn.disabled=false;btn.textContent='🔨 开始锻造！';
+  if(r.enhance_ok){
+    setPlayer(r.player);rsb();enhance_stones={small:0,medium:0,large:0};
+    const celeb=r.celebration||'normal';
+    if(r.capoo_gif&&(celeb==='great'||celeb==='legend'||celeb==='mythic')){
+      showModal('🎉 强化成功！',`<div style="font-size:24px;color:var(--yellow);margin:8px 0">+${r.old_level} → +${r.new_level}！</div>
+        ${r.capoo_gif?`<img src="/picture/enemy/${r.capoo_gif}" style="max-width:150px;border-radius:10px;margin:8px 0">`:''}
+        <div style="color:var(--cyan)">${r.message}</div>`,
+        '<button class="btn btn-c" onclick="closeModal();se()">继续</button>');
+    }else{
+      se();addLog('🔨 '+r.message);
+    }
+  }else{
+    setPlayer(r.player);rsb();
+    if(r.message?.includes('不足')){alert(r.message);se();}
+    else{se();addLog('💔 '+r.message);}
+  }
+}
+
+// ═══════════════ 角色详情 ═══════════════
+async function si(){enterPage('info');
+  await refreshPlayer();
+  const en=player.equip_names||{};const p=player;
+  let h='<div class="fade-in"><h2>📋 角色详情</h2>';
+  h+=`<div class="card"><div class="sr"><span class="sl">名字</span><span class="sv" style="color:var(--yellow)">${p.name} ${p.gender=='女'?'♀':'♂'}</span></div>
+  <div class="sr"><span class="sl">等级</span><span class="sv">Lv.${p.level}</span></div>
+  <div class="sr"><span class="sl">Rating</span><span class="sv" style="color:var(--cyan)">${fmtNum(p.rating||1000)}</span></div>
+  <div class="sr"><span class="sl">战斗力</span><span class="sv">${cpBadge(p.power)}</span></div>
+  <div class="sr"><span class="sl">暴击率</span><span class="sv" style="color:var(--purple)">${p.crit_rate}%</span></div>
+  <div class="sr"><span class="sl">暴击倍率</span><span class="sv">×${p.crit_dmg}</span></div></div>`
+  h+=`<h3>🛡️ 装备详情</h3><div class="card">`
+  for(const[sn,en]of Object.entries(en)){h+=`<div class="sr"><span class="sl">${sn}</span><span class="sv" style="color:var(--cyan)">${en}</span></div>`}
+  h+=`<div class="sr"><span class="sl">装备防御</span><span class="sv" style="color:var(--blue)">+${p.equip_defense||0}</span></div></div>`
+  h+=`<h3>💎 强化石</h3><div class="card">
+  <div class="sr"><span class="sl">小强化石</span><span class="sv">${p.stones_small}</span></div>
+  <div class="sr"><span class="sl">中强化石</span><span class="sv">${p.stones_medium}</span></div>
+  <div class="sr"><span class="sl">大强化石</span><span class="sv">${p.stones_large}</span></div></div>`
+  h+=`<h3>🧩 高阶材料</h3><div class="card">
+  <div class="sr"><span class="sl">魔罐碎片</span><span class="sv">${p.magic_can_fragment||0}</span></div>
+  <div class="sr"><span class="sl">武器碎片</span><span class="sv">${p.weapon_fragments||0}</span></div>
+  <div class="sr"><span class="sl">装备碎片</span><span class="sv">${p.equip_fragments||0}</span></div></div>`
+  h+=`<div style="margin-top:8px"><button class="btn btn-c btn-sm" onclick="showAvatarUpload()">📷 上传头像</button></div></div>`
+  document.getElementById('content').innerHTML=h}
+
+function showAvatarUpload(){
+  showModal('📷 上传头像','<input type="file" id="av-file" accept="image/*" style="display:none" onchange="handleAvatarFile(this)"><button class="btn btn-c" onclick="document.getElementById(\'av-file\').click()">📁 选择图片文件</button><p style="font-size:10px;color:var(--dim);margin-top:6px">支持 jpg/png/gif/webp，自动压缩到256px</p><img id="av-preview" style="max-width:120px;max-height:120px;border-radius:8px;margin-top:8px;display:none">',
+    '<button class="btn btn-sm" onclick="closeModal()">取消</button>')}
+
+async function handleAvatarFile(input){
+  const file=input.files&&input.files[0];if(!file)return;
+  if(!file.type.startsWith('image/')){alert('请选择图片文件');return}
+  const base64=await resizeImage(file,256,256);
+  document.getElementById('av-preview').src=base64;document.getElementById('av-preview').style.display='block';
+  const r=await api('/api/upload_avatar',{avatar:base64});
+  if(r.ok){player.avatar=base64;rsb();addLog('📷 头像已更新')}else{alert(r.error||'上传失败')}}
+
+function resizeImage(file,maxW,maxH){return new Promise((resolve,reject)=>{
+  const reader=new FileReader();reader.onload=function(e){
+    const img=new Image();img.onload=function(){
+      const canvas=document.createElement('canvas');let w=img.width,h=img.height;
+      if(w>maxW||h>maxH){const ratio=Math.min(maxW/w,maxH/h);w*=ratio;h*=ratio}
+      canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',0.85))};
+    img.src=e.target.result};reader.readAsDataURL(file)})}
+
+
+// ═══════════════ 天使魔罐 ═══════════════
+async function sangel(){enterPage('angel');
+  const r=await api("/api/angel_can/info");const it=r.items||{};const st=r.stats||{};const pg=r.progress||{};
+  let h='<div class="fade-in"><h2>🏺 天使魔罐</h2>';
+  h+='<div style="font-size:11px;color:var(--dim)">🔨锤:'+it.angel_hammer+' 💎碎片:'+it.fragment+' ✨祝福:'+it.blessing+' | 距银罐差'+pg.silver_need+'个 距金罐差'+pg.gold_need+'个</div>';
+  h+='<div style="font-size:10px;color:var(--purple)">天使魔罐只能从几维鸟副本获得；魔锤可用500金币购买4个。</div>';
+  h+='<button class="btn btn-o btn-sm" onclick="buyHammerPack()" style="margin:6px 0">🔨 购买魔锤4个/500金币</button>';
+  h+='<button class="btn btn-c btn-sm" onclick="exchangeCanFragment()" style="margin:6px 0 6px 6px" '+(it.fragment<50?'disabled':'')+'>💎 50碎片兑换天使魔罐×1</button>';
+  var cans=[{n:"天使魔罐",i:"angel_pot",h:it.angel_pot,t:"angel",d:"基础魔罐"},{n:"华丽银罐",i:"silver_pot",h:it.silver_pot,t:"silver",d:"进阶魔罐"},{n:"耀眼金罐",i:"gold_pot",h:it.gold_pot,t:"gold",d:"高级魔罐"}];
+  cans.forEach(c=>{h+='<div class="card" style="display:flex;gap:6px;align-items:center;margin:4px 0"><img src="/picture/feature/angel_can/'+c.i+'.png" onerror="this.style.display=\'none\'" style="width:48px;height:48px;border-radius:8px"><div style="flex:1"><b>'+c.n+'</b><br><span style="font-size:10px;color:var(--dim)">'+c.d+'</span><br><span style="font-size:10px">消耗:4🔨 | 拥有:<b>'+c.h+'</b></span></div><div><button class="btn btn-c btn-sm" onclick="openCan(\''+c.t+'\',1)" '+(c.h<1||it.angel_hammer<4?"disabled":"")+'>开1次</button><button class="btn btn-o btn-sm" onclick="openCan(\''+c.t+'\',10)" '+(c.h<10||it.angel_hammer<40?"disabled":"")+'>开10次</button></div></div>';});
+  h+='</div>';document.getElementById("content").innerHTML=h}
+async function openCan(type,count){addLog("🔨 开启魔罐…");const r=await api("/api/angel_can/open",{can_type:type,count:count});if(!r.ok){alert(r.error);return}setPlayer(r.player);rsb();let rew="<div style=\"font-size:11px;color:var(--dim);margin-bottom:6px\">消耗: 魔罐×"+(r.consumed?.pot||count)+"，魔锤×"+(r.consumed?.hammer||count*4)+"</div>";(r.rewards||[]).forEach((rw,i)=>{rew+="<div style=\"margin:3px 0;padding:3px;border:1px solid var(--border);border-radius:6px\"><b>"+(rw.rarity||"?")+"</b><br>";rw.items.forEach(item=>rew+=(item.icon||"🎁")+" "+item.name+" "+(item.n||"")+"<br>");rew+="</div>"});let bonus="";if(r.bonus&&r.bonus.silver)bonus+="<div style=\"color:var(--cyan)\">🎉 赠送华丽银罐×1!</div>";if(r.bonus&&r.bonus.gold)bonus+="<div style=\"color:var(--orange)\">🎉🎉 赠送耀眼金罐×1!</div>";showModal("🏺 魔罐结果",rew+bonus,"<button class=\"btn btn-c\" onclick=\"closeModal();sangel()\">继续</button>")}
+async function buyHammerPack(){const r=await api('/api/angel_can/buy_hammers',{});if(!r.ok){alert(r.error||'购买失败');return}setPlayer(r.player);rsb();addLog('🔨 已购买天使魔锤×4');sangel()}
+async function exchangeCanFragment(){const r=await api('/api/angel_can/exchange_fragment',{});if(!r.ok){alert(r.error||'兑换失败');return}setPlayer(r.player);rsb();addLog('💎 已用50碎片兑换天使魔罐×1');sangel()}
+
+// ═══════════════ 排行榜 ═══════════════
+let lbTab="combat_power";
+async function slb(){enterPage('leaderboard');const r=await api('/api/leaderboards?type='+lbTab);const d=r;var rankings=d.rankings||[];var my=d.my_rank;
+  // 强制前端再次排序，避免缓存/后端 rank 字段导致视觉名次混乱
+  rankings = rankings.slice().sort((a,b)=> lbTab==='level' ? ((b.level||0)-(a.level||0)|| (b.exp||0)-(a.exp||0)|| (b.combat_power||0)-(a.combat_power||0)) : ((b.combat_power||0)-(a.combat_power||0)|| (b.level||0)-(a.level||0)|| (b.exp||0)-(a.exp||0)) );
+  let h="<div class=\"fade-in\"><h2>🏆 GiguaT 排行榜</h2>";
+  h+="<div style=\"font-size:10px;color:var(--dim);margin:3px 0\">更新:"+(d.last_refresh_at||"").substring(0,16)+" | 下次:"+(d.next_refresh_at||"").substring(0,16)+"</div>";
+  h+="<div style=\"display:flex;gap:4px;margin:6px 0\"><button class=\"btn btn-sm "+(lbTab=='combat_power'?'btn-c':'')+"\" onclick=\"lbTab='combat_power';slb()\">⚔️战力</button><button class=\"btn btn-sm "+(lbTab=='level'?'btn-c':'')+"\" onclick=\"lbTab='level';slb()\">⭐等级</button><button class=\"btn btn-sm\" onclick=\"api('/api/leaderboards/refresh',{});setTimeout(slb,500)\">🔄刷新</button></div>";
+  if(rankings.length>=1){var top=rankings.slice(0,3);var medals=['🥇','🥈','🥉'];var golds=['#ffd700','#c0c0c0','#cd7f32'];h+="<div style=\"display:flex;gap:8px;margin:8px 0\">";
+    top.forEach((e,i)=>{h+="<div class=\"card\" style=\"flex:1;text-align:center;border-color:"+golds[i]+";"+(e.is_current?'box-shadow:0 0 15px var(--cyan)':'')+"\"><div style=\"font-size:22px\">"+medals[i]+"</div><div class=\"avatar-frame top-avatar-frame\" style=\"margin:4px auto\">"+avatarImg(e.avatar,'','width:76px;height:76px;border-radius:16px')+"</div><div style=\"font-weight:700;font-size:12px\">"+e.display_name+(e.is_bot?" <span style=\"font-size:9px;color:var(--purple)\">系统</span>":"")+"</div><div style=\"font-size:10px;color:var(--dim);margin:4px 0\">Lv."+e.level+"</div>"+cpBadge(e.combat_power)+"<div style=\"margin-top:4px\">"+ratingBadge(e.rating||1000)+"</div><div style=\"font-size:9px;color:var(--dim)\">"+(e.weapon_name||'无')+"</div></div>"});h+="</div>"}
+  h+="<div style=\"max-height:240px;overflow-y:auto\">";
+  for(var i=3;i<rankings.length;i++){var e=rankings[i];var rc=e.rank_change||0;var displayRank=i+1;
+    h+="<div class=\"card\" style=\"display:flex;align-items:center;gap:7px;margin:2px 0;padding:5px 7px;"+(e.is_current?'border:2px solid var(--cyan)':'')+"\"><span style=\"font-weight:700;min-width:28px;font-size:12px\">#"+displayRank+"</span><span style=\"font-size:10px;color:"+(rc>0?'var(--green)':rc<0?'var(--red)':'var(--dim)')+"\">"+(rc>0?'↑'+rc:rc<0?'↓'+Math.abs(rc):'—')+"</span><div class=\"avatar-frame\">"+avatarImg(e.avatar,'','width:40px;height:40px;border-radius:10px')+"</div><span style=\"flex:1;font-size:11px\">"+e.display_name+(e.is_bot?' <span style=\"font-size:9px;color:var(--purple)\">系统</span>':'')+"<br><span style=\"font-size:9px;color:var(--cyan)\">Rating "+fmtNum(e.rating||1000)+"</span></span><span style=\"color:var(--dim);font-size:10px\">Lv."+e.level+"</span>"+cpBadge(e.combat_power)+"</div>"}
+  h+="</div>";if(my)h+="<div class=\"card\" style=\"text-align:center;margin-top:6px;background:var(--bg3);border-color:var(--cyan)\">📍 我的排名: 第<b>"+my.rank+"</b>名 "+cpBadge(my.combat_power)+"</div>";h+="</div>";document.getElementById('content').innerHTML=h}
+
+
+// ═══════════════ 拟真人对战 ═══════════════
+async function sbotbattle(){enterPage('botbattle');
+  const wait=3000+Math.floor(Math.random()*2000);
+  const tips=['正在寻找实力接近的竞技玩家','正在同步对手装备与Rating','正在校验战斗力区间','正在进入真人竞技房间'];
+  document.getElementById("content").innerHTML=`<div class="fade-in match-wait"><div class="wait-ring"></div><h2>⚔️ 真人对战匹配中</h2><p style="color:var(--dim);font-size:12px">${tips[Math.floor(Math.random()*tips.length)]}</p><p style="color:var(--purple);font-size:11px;margin-top:6px">预计等待 ${(wait/1000).toFixed(1)} 秒</p></div>`;
+  await sleep(wait);
+  const r=await api('/api/bots');var bots=r.bots||[];
+  if(bots.length<1){document.getElementById("content").innerHTML="<div class=\"fade-in\"><h2>⚔️ 真人对战</h2><p>暂无竞技玩家数据，请先生成。</p><button class=\"btn btn-c\" onclick=\"api('/api/bots/generate',{count:30});setTimeout(sbotbattle,2000)\">生成竞技玩家</button></div>";return}
+  var opp=bots[Math.floor(Math.random()*bots.length)];
+  let av=avatarImg(opp.avatar,'','width:86px;height:86px;border-radius:18px');
+  let h="<div class=\"fade-in\"><h2>⚔️ 真人对战</h2><p style=\"font-size:11px;color:var(--dim)\">匹配到一名竞技玩家镜像。对手会成长、换装、强化并参与排行榜。</p>";
+  h+="<div class=\"card\" style=\"text-align:center\"><div style=\"font-size:16px;font-weight:700;color:var(--green)\">匹配成功！</div><div class=\"avatar-frame top-avatar-frame\" style=\"margin:8px auto\">"+av+"</div><div style=\"margin:8px 0\"><b>"+opp.display_name+"</b> Lv."+opp.level+"</div><div style=\"margin:8px 0\">"+cpBadge(opp.combat_power)+" "+ratingBadge(opp.rating||1000)+"</div><div style=\"font-size:11px;color:var(--dim)\">武器:"+(opp.weapon_name||opp.weapon_id||"无")+"</div><button class=\"btn btn-c btn-lg\" onclick=\"startBotBattle('"+opp.bot_id+"')\">⚔️ 开始对战</button></div></div>";
+  document.getElementById("content").innerHTML=h}
+
+
+async function startBotBattle(botId){
+  const r=await api('/api/bot_battle/start',{bot_id:botId});
+  if(!(r.ok||r.success)){addLog('❌ 真人对战启动失败：'+(r.error||'未知错误'),'en');return}
+  enemyData=r.enemy||r.opponent;battle=r.battle;
+  player.hp=battle.player_hp;player.rage=battle.player_rage||0;
+  enterPage('bot_battle_fight');rsb();rbs();
+  addLog('⚔️ 真人对战开始：'+enemyData.name+' Lv.'+enemyData.level+' 战斗力'+(enemyData.combat_power||'')+' Rating '+(enemyData.rating||1000));
+}
+
+// ═══════════════ 聊天+公告 ═══════════════
+async function loadChat(){const ch=document.getElementById("chat-ch")?document.getElementById("chat-ch").value:"world";const r=await api("/api/chat");var msgs=r.messages||[];msgs=msgs.filter(m=>ch=="all"||m.channel==ch);var h="";msgs.slice(-50).forEach(m=>{h+="<div style=\"padding:2px 0\"><b style=\"color:"+(m.is_bot?"var(--purple)":"var(--cyan)")+"\">"+(m.is_bot?"":"[我]")+m.name+"</b>: "+m.msg+"</div>"});var el=document.getElementById("chat-msgs");if(el){el.innerHTML=h;el.scrollTop=el.scrollHeight}}
+async function sendChat(){var inp=document.getElementById("chat-input");if(!inp||!inp.value.trim())return;const ch=document.getElementById("chat-ch")?.value||"world";await api("/api/chat/send",{msg:inp.value.trim(),channel:ch==="all"?"world":ch});inp.value="";loadChat()}
+async function loadAnnouncements(){const r=await api("/api/announcements");var anns=r.announcements||[];if(anns.length>0){var el=document.getElementById("announce-bar");if(el){el.style.display="block";el.textContent="📢 "+anns[anns.length-1].msg;el.title=anns.map(a=>a.msg).join(" | ")}}}
+
+// Auto-load announcements
+setInterval(loadAnnouncements,25000);
+setInterval(loadChat,15000);
+
+// ═══════════════════ 键盘 ═══════════════
+document.addEventListener('keydown',e=>{if(cur==='battle'&&battle){if(e.key==='Enter'||e.key===' ')pa();if(e.key==='u'||e.key==='U')pul()}});
+
+smm();
+</script>
+</body>
+</html>
+
+
+
