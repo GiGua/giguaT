@@ -147,6 +147,9 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
   #chat-compose button{font-size:10px;padding:4px 8px}
   .action-row{flex-wrap:wrap;gap:6px}
   .action-row button{flex:1;min-width:60px;font-size:12px}
+  #chat-panel.mobile-collapsed #chat-msgs{display:none}
+  #chat-panel.mobile-collapsed #chat-compose{display:none}
+  #btn-chat-toggle{display:inline-block!important}
 }
 </style>
 </head>
@@ -174,13 +177,13 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
     <span id="hdr-user" style="font-size:10px;color:var(--cyan);margin-right:6px"></span>
     <button class="btn btn-sm btn-c" onclick="goBack()" id="btn-back" style="display:none">← 返回</button>
     <button class="btn btn-sm btn-c" onclick="saveGame()">💾 保存</button>
-    <button class="btn btn-sm btn-r" onclick="showDelete()">🗑️ 删除</button>
+    <button class="btn btn-sm btn-r" onclick="showDelete()">删除</button>
     <button class="btn btn-sm btn-r" onclick="doLogout()" style="font-size:9px">🚪</button>
   </div>
 </header>
-<main><div id="left-rail"><div id="sidebar"></div></div><div id="content"></div></main>
+<main><div id="left-rail"><div id="sidebar"></div></div><div id="content"><div style="text-align:center;padding:60px 20px;color:var(--dim)"><div style="font-size:32px;margin-bottom:12px">⚡</div><div id="content-status">正在连接服务器…</div></div></div></main>
 <div id="social-panel"><div id="announce-bar">公告加载中…</div><div id="chat-panel">
-  <div id="chat-head"><span style="font-size:11px;font-weight:700">💬 公屏聊天</span><div><select id="chat-ch" onchange="loadChat()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);font-size:10px;padding:2px"><option value="all">全部</option><option value="world">world</option><option value="arena">arena</option><option value="dungeon">dungeon</option><option value="pot">pot</option><option value="enhance">enhance</option></select></div></div>
+  <div id="chat-head"><span style="font-size:11px;font-weight:700">💬 公屏聊天</span><div style="display:flex;gap:4px;align-items:center"><select id="chat-ch" onchange="loadChat()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border);font-size:10px;padding:2px"><option value="all">全部</option><option value="world">world</option><option value="arena">arena</option><option value="dungeon">dungeon</option><option value="pot">pot</option><option value="enhance">enhance</option></select><button class="btn btn-sm btn-c" onclick="toggleMobileChat()" id="btn-chat-toggle" style="font-size:9px;display:none">▼</button></div></div>
   <div id="chat-msgs"></div>
   <div id="chat-compose"><input id="chat-input" placeholder="输入…" style="flex:1;min-width:0;background:var(--bg2);color:var(--text);border:1px solid var(--border);padding:5px;font-size:11px;border-radius:4px" onkeydown="if(event.key=='Enter')sendChat()"><button class="btn btn-sm btn-c" onclick="sendChat()" style="font-size:10px">发送</button></div>
 </div></div>
@@ -269,13 +272,19 @@ function enterPage(pageId){
 function resetToMainPage(){cur='menu';pageStack.length=0;setBackVisible()}
 function clearBattleLikeState(){battle=null;enemyData=null;dungeonData=null;dungeonStage=0}
 function goBack(){
-  if(document.getElementById('mo')?.classList.contains('sh')){closeModal();return}
-  if((cur==='battle'||cur==='bot_battle_fight') && battle){
-    if(!confirm('当前对战还未结束，确定退出吗？')) return;
-    clearBattleLikeState();
+  try{
+    if(document.getElementById('mo')?.classList.contains('sh')){closeModal();return}
+    if((cur==='battle'||cur==='bot_battle_fight') && battle){
+      if(!confirm('当前对战还未结束，确定退出吗？')) return;
+      clearBattleLikeState();
+    }
+    const prev=pageStack.pop() || 'menu';
+    routeToPage(prev,false);
+  }catch(e){
+    console.error('goBack error:',e);
+    addLog('⚠️ 导航出错，已返回主菜单','dl');
+    resetToMainPage();smm();
   }
-  const prev=pageStack.pop() || 'menu';
-  routeToPage(prev,false);
 }
 function routeToPage(pageId,push=false){
   const old=navPushEnabled;navPushEnabled=push;
@@ -291,7 +300,12 @@ function routeToPage(pageId,push=false){
     if(pageId==='angel') return sangel();
     if(pageId==='leaderboard') return slb();
     if(pageId==='botbattle') return sbotbattle();
+    addLog(`⚠️ 未知页面 ${pageId}，返回主菜单`,'dl');
     return smm();
+  }catch(e){
+    console.error('routeToPage error:',e,pageId);
+    addLog('⚠️ 页面加载失败，返回主菜单','dl');
+    resetToMainPage();smm();
   }finally{navPushEnabled=old;}
 }
 function normalizeImgSrc(src){
@@ -336,7 +350,26 @@ function rewardHtml(r){
 
 async function api(u,d=null){
   const o=d?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}:{};
-  return(await fetch(A+u,o)).json()}
+  try{
+    const res=await fetch(A+u,o);
+    if(!res.ok){
+      console.error(`API ${res.status} ${u}: ${res.statusText}`);
+      addLog(`⚠️ 服务器错误(${res.status})，请稍后重试`,'en');
+      return {ok:false,error:`HTTP ${res.status}`,status:res.status};
+    }
+    const text=await res.text();
+    try{return JSON.parse(text);}
+    catch(pe){
+      console.error(`API JSON parse error ${u}:`,text.substring(0,200));
+      addLog('⚠️ 数据解析异常，请刷新页面','en');
+      return {ok:false,error:'JSON parse error',raw:text.substring(0,500)};
+    }
+  }catch(e){
+    console.error(`API network error ${u}:`,e.message||e);
+    addLog('⚠️ 网络连接失败，检查网络后刷新','en');
+    return {ok:false,error:e.message||'Network error',offline:true};
+  }
+}
 
 function setPlayer(next){
   if(!next||typeof next!=='object')return player;
@@ -401,6 +434,12 @@ function rsb(){
 async function smm(){
   resetToMainPage();battle=null;enemyData=null;dungeonData=null;dungeonStage=0;
   const r=await api('/api/state');
+  if(!r.ok){
+    const st=document.getElementById('content-status');
+    if(st)st.textContent='服务器连接失败，请刷新页面或稍后再试';
+    document.getElementById('content').innerHTML=`<div style="text-align:center;padding:60px 20px;color:var(--dim)"><div style="font-size:32px;margin-bottom:12px">🔌</div><div>服务器连接失败</div><div style="font-size:12px;margin-top:8px">${r.error||'请检查网络后刷新页面'}</div><button class="btn btn-c btn-sm" onclick="location.reload()" style="margin-top:16px">🔄 刷新页面</button></div>`;
+    return;
+  }
   if(r.has_player)setPlayer(r.player);rsb();
   const c=document.getElementById('content');
   if(player){
@@ -445,7 +484,7 @@ async function delS(){
   await api('/api/delete');
   player=null;clearBattleLikeState();closeModal();rsb();
   document.getElementById('log-area').innerHTML='';
-  addLog('🗑️ 存档已清除');
+  addLog('存档已清除');
   smm();
 }
 
@@ -988,9 +1027,11 @@ async function startBotBattle(botId){
 }
 
 // ═══════════════ 聊天+公告 ═══════════════
-async function loadChat(){const ch=document.getElementById("chat-ch")?document.getElementById("chat-ch").value:"world";const r=await api("/api/chat");var msgs=r.messages||[];msgs=msgs.filter(m=>ch=="all"||m.channel==ch);var h="";msgs.slice(-50).forEach(m=>{h+="<div style=\"padding:2px 0\"><b style=\"color:"+(m.is_bot?"var(--purple)":"var(--cyan)")+"\">"+(m.is_bot?"":"[我]")+m.name+"</b>: "+m.msg+"</div>"});var el=document.getElementById("chat-msgs");if(el){el.innerHTML=h;el.scrollTop=el.scrollHeight}}
+function escHtml(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+async function loadChat(){const ch=document.getElementById("chat-ch")?document.getElementById("chat-ch").value:"world";const r=await api("/api/chat");var msgs=r.messages||[];msgs=msgs.filter(m=>ch=="all"||m.channel==ch);var h="";msgs.slice(-50).forEach(m=>{h+="<div style=\"padding:2px 0\"><b style=\"color:"+(m.is_bot?"var(--purple)":"var(--cyan)")+"\">"+(m.is_bot?"":"[我]")+escHtml(m.name)+"</b>: "+escHtml(m.msg)+"</div>"});var el=document.getElementById("chat-msgs");if(el){el.innerHTML=h;el.scrollTop=el.scrollHeight}}
 async function sendChat(){var inp=document.getElementById("chat-input");if(!inp||!inp.value.trim())return;const ch=document.getElementById("chat-ch")?.value||"world";await api("/api/chat/send",{msg:inp.value.trim(),channel:ch==="all"?"world":ch});inp.value="";loadChat()}
-async function loadAnnouncements(){const r=await api("/api/announcements");var anns=r.announcements||[];if(anns.length>0){var el=document.getElementById("announce-bar");if(el){el.style.display="block";el.textContent="📢 "+anns[anns.length-1].msg;el.title=anns.map(a=>a.msg).join(" | ")}}}
+function toggleMobileChat(){const p=document.getElementById('chat-panel');const b=document.getElementById('btn-chat-toggle');if(!p||!b)return;const isCollapsed=p.classList.toggle('mobile-collapsed');b.textContent=isCollapsed?'▶':'▼';loadChat()}
+async function loadAnnouncements(){const r=await api("/api/announcements");var anns=r.announcements||[];if(anns.length>0){var el=document.getElementById("announce-bar");if(el){el.style.display="block";el.textContent="📢 "+anns[anns.length-1].msg;el.title=anns.map(a=>a.msg).join(" | ")}}else{var el=document.getElementById("announce-bar");if(el){el.textContent="暂无公告";el.title=""}}}
 
 // Auto-load announcements
 setInterval(loadAnnouncements,25000);
