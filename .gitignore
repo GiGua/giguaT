@@ -21,3 +21,6 @@ test/
 .idea/
 .hermes/
 *.pyc
+*.exe
+auth.json
+ai_saves/

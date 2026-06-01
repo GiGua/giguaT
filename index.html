@@ -111,17 +111,71 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 
 .avatar-frame{width:44px;height:44px;border-radius:12px;padding:2px;background:linear-gradient(135deg,#00e5ff,#8a5cff,#ffcc00);box-shadow:0 0 10px rgba(0,229,255,.35);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}.avatar-frame img{display:block;background:#111827}.top-avatar-frame{width:86px;height:86px;border-radius:20px}.top-avatar-frame img{border-radius:18px}
 
-@media(max-width:800px){main{flex-direction:column}#left-rail{width:100%;min-width:unset}#chat-msgs{height:160px}.wgrid,.mgrid{grid-template-columns:1fr}}
+@media(max-width:800px){
+  main{flex-direction:column}
+  #left-rail{width:100%;min-width:unset}
+  #chat-msgs{height:130px}
+  .wgrid,.mgrid{grid-template-columns:1fr}
+  #app{max-width:100%;padding:6px 8px}
+  header{flex-wrap:wrap;gap:4px;padding:8px 10px}
+  header .logo{font-size:16px}
+  .hdr-btns{gap:4px}
+  .btn-sm{padding:6px 12px;font-size:12px}
+  .btn{padding:8px 14px;font-size:13px}
+  #content{padding:10px;min-height:340px}
+  h2{font-size:15px}
+  h3{font-size:13px}
+  .card{padding:8px;margin:4px 0}
+  .mi .ic{font-size:24px}
+  .mi .tt{font-size:13px}
+  .mi{padding:12px 8px}
+  .card-flip{width:70px!important;height:100px!important}
+  .card-flip .card-front{font-size:24px!important}
+  .card-flip .card-back{font-size:10px!important;padding:3px!important}
+  .card-flip .card-back button{font-size:8px!important;padding:2px 4px!important}
+  .enemy-stat-grid{grid-template-columns:repeat(2,1fr)}
+  .enemy-gif-wrap img{max-width:80px;max-height:80px}
+  .modal{max-width:95vw;padding:14px}
+  .battle-top{flex-direction:column}
+  .avatar-frame{width:36px;height:36px}
+  .top-avatar-frame{width:56px;height:56px}
+  .avatar-frame img{border-radius:8px}
+  #social-panel{display:flex;flex-direction:column;gap:4px}
+  #announce-bar{font-size:10px;max-height:32px}
+  #chat-msgs{font-size:10px}
+  #chat-compose input{font-size:10px;padding:4px}
+  #chat-compose button{font-size:10px;padding:4px 8px}
+  .action-row{flex-wrap:wrap;gap:6px}
+  .action-row button{flex:1;min-width:60px;font-size:12px}
+}
 </style>
 </head>
 <body>
+<!-- ═══ 登录/注册遮罩 ═══ -->
+<div id="login-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:10000;display:flex;align-items:center;justify-content:center">
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:30px 24px;width:340px;max-width:90vw;text-align:center;box-shadow:0 0 40px rgba(0,229,255,.12)">
+  <div style="font-size:28px;font-weight:900;margin-bottom:4px"><s1 style="color:var(--cyan)">GiguaT</s1></div>
+  <div style="font-size:11px;color:var(--dim);margin-bottom:18px">一人一号，存档不丢</div>
+  <input id="login-user" placeholder="用户名" style="width:100%;padding:10px;margin:6px 0;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px">
+  <input id="login-pass" type="password" placeholder="密码" style="width:100%;padding:10px;margin:6px 0;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px">
+  <input id="login-pass2" type="password" placeholder="确认密码" style="width:100%;padding:10px;margin:6px 0;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;font-size:14px;display:none">
+  <div id="login-err" style="color:var(--red);font-size:11px;min-height:18px;margin:4px 0"></div>
+  <button class="btn btn-c btn-block" onclick="doLogin()" id="btn-login" style="margin:4px 0;font-size:14px">登 录</button>
+  <button class="btn btn-g btn-block" onclick="doRegister()" id="btn-register" style="margin:4px 0;font-size:14px;display:none">注 册</button>
+  <div style="margin-top:12px;font-size:11px;color:var(--dim)">
+    <span id="toggle-hint">没有账号？</span>
+    <a href="#" onclick="toggleLoginMode();return false" style="color:var(--cyan);text-decoration:none" id="toggle-link">注册</a>
+  </div>
+</div></div>
 <div id="app">
 <header>
   <div class="logo"><s1>GiguaT</s1></div>
   <div class="hdr-btns">
+    <span id="hdr-user" style="font-size:10px;color:var(--cyan);margin-right:6px"></span>
     <button class="btn btn-sm btn-c" onclick="goBack()" id="btn-back" style="display:none">← 返回</button>
     <button class="btn btn-sm btn-c" onclick="saveGame()">💾 保存</button>
     <button class="btn btn-sm btn-r" onclick="showDelete()">🗑️ 删除</button>
+    <button class="btn btn-sm btn-r" onclick="doLogout()" style="font-size:9px">🚪</button>
   </div>
 </header>
 <main><div id="left-rail"><div id="sidebar"></div></div><div id="content"></div></main>
@@ -137,6 +191,69 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 <script>
 const A='';let player=null,battle=null,enemyData=null,cur='menu';
 let dungeonData=null,dungeonStage=0;
+let loginUser=''; // 当前登录用户名
+
+// ═══════════════ 登录/注册 ═══════════════
+let loginMode='login';
+function toggleLoginMode(){
+  loginMode=loginMode==='login'?'register':'login';
+  document.getElementById('login-pass2').style.display=loginMode==='register'?'block':'none';
+  document.getElementById('btn-login').style.display=loginMode==='login'?'block':'none';
+  document.getElementById('btn-register').style.display=loginMode==='register'?'block':'none';
+  document.getElementById('toggle-hint').textContent=loginMode==='login'?'没有账号？':'已有账号？';
+  document.getElementById('toggle-link').textContent=loginMode==='login'?'注册':'登录';
+  document.getElementById('login-err').textContent='';
+}
+async function doLogin(){
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value.trim();
+  const err=document.getElementById('login-err');
+  if(!u||!p){err.textContent='请输入用户名和密码';return}
+  const r=await api('/api/auth/login',{username:u,password:p});
+  if(!r.ok){err.textContent=r.error||'登录失败';return}
+  loginUser=r.username;
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('hdr-user').textContent='👤 '+loginUser;
+  player=r.player;smm();
+}
+async function doRegister(){
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value.trim();
+  const p2=document.getElementById('login-pass2').value.trim();
+  const err=document.getElementById('login-err');
+  if(!u||u.length<2){err.textContent='用户名至少2个字符';return}
+  if(!p||p.length<3){err.textContent='密码至少3个字符';return}
+  if(p!==p2){err.textContent='两次密码不一致';return}
+  const r=await api('/api/auth/register',{username:u,password:p});
+  if(!r.ok){err.textContent=r.error||'注册失败';return}
+  loginUser=r.username;
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('hdr-user').textContent='👤 '+loginUser;
+  player=r.player;smm();
+}
+async function doLogout(){
+  if(!confirm('确定退出登录？'))return;
+  await api('/api/auth/logout',{});
+  loginUser='';player=null;cur='menu';
+  document.getElementById('login-overlay').style.display='flex';
+  document.getElementById('hdr-user').textContent='';
+  document.getElementById('content').innerHTML='';
+  document.getElementById('sidebar').innerHTML='';
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-pass2').value='';
+  document.getElementById('login-err').textContent='';
+}
+// 启动时检查登录状态
+(async function initAuth(){
+  const r=await api('/api/auth/status');
+  if(r.logged_in){
+    loginUser=r.username;
+    document.getElementById('login-overlay').style.display='none';
+    document.getElementById('hdr-user').textContent='👤 '+loginUser;
+    smm();
+  }
+})();
 
 // ═══════════════ 统一页面导航 / 返回上一层 ═══════════════
 // 旧版返回按钮写死 screenMainMenu()，所以任何页面都会直接回主菜单。
@@ -479,7 +596,7 @@ function showCardFlip(dr){
   let html=`<div class="fade-in" style="text-align:center">
     <h2 style="color:var(--yellow)">🏆 副本通关！</h2>
     <p style="color:var(--dim)">💰 +${cr}金币 | ⭐ +${er}经验</p>
-    <p style="font-size:12px;color:var(--purple);margin:8px 0">点击卡牌翻面查看奖励</p>
+    <p style="font-size:12px;color:var(--purple);margin:8px 0">点击卡牌翻面，最多翻2张</p>
     <div class="card-grid" style="display:flex;gap:10px;justify-content:center;flex-wrap:nowrap;overflow-x:auto;margin:12px 0">`;
   cards.forEach((c,i)=>{
     const rarityColors={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'};
@@ -499,9 +616,9 @@ function showCardFlip(dr){
 </div></div>`;
   });
   html+=`</div>
-    <p id="flip-tip" style="font-size:10px;color:var(--dim)">已翻 0/5 张，翻开的装备可立即装备</p>
+    <p id="flip-tip" style="font-size:10px;color:var(--dim)">已翻 0/2 张，翻开的装备可立即装备</p>
     <button class="btn btn-c" onclick="closeModal();checkDungeonNext()">继续</button>
-    <button class="btn btn-sm" onclick="flipAllCards()" style="margin-left:8px">全部翻开</button>
+    <button class="btn btn-sm" onclick="flipRandomTwo()" style="margin-left:8px">随机翻2张</button>
   </div>`;
   document.getElementById('mc').innerHTML=html;
   document.getElementById('mo').classList.add('sh');
@@ -512,15 +629,27 @@ function flipCard(i){
   const card=document.getElementById('card-'+i);
   if(!inner||!card)return;
   if(card.dataset.flipped==='1')return;
+  if(flippedCardCount>=2)return;
   card.dataset.flipped='1';flippedCardCount++;
   inner.style.transform='rotateY(180deg)';
-  // 翻开后加脉冲特效
   card.style.animation='cardPulse 0.6s ease';
-  const tip=document.getElementById('flip-tip');if(tip)tip.textContent=`已翻 ${flippedCardCount}/5 张`;
+  const tip=document.getElementById('flip-tip');if(tip)tip.textContent=`已翻 ${flippedCardCount}/2 张`;
+  // 翻满2张后，剩余3张显示漏光
+  if(flippedCardCount>=2){
+    for(let j=0;j<5;j++){
+      const c=document.getElementById('card-'+j);
+      if(c&&c.dataset.flipped!=='1'){
+        c.style.opacity='0.3';c.style.filter='grayscale(0.8)';
+        c.style.pointerEvents='none';
+        c.title='已错过';
+      }
+    }
+  }
 }
 
-function flipAllCards(){
-  for(let i=0;i<5;i++)flipCard(i);
+function flipRandomTwo(){
+  const ids=[0,1,2,3,4].sort(()=>Math.random()-.5);
+  for(const i of ids){if(flippedCardCount>=2)break;flipCard(i)}
 }
 
 // 卡牌呼吸动画
@@ -870,7 +999,6 @@ setInterval(loadChat,15000);
 // ═══════════════════ 键盘 ═══════════════
 document.addEventListener('keydown',e=>{if(cur==='battle'&&battle){if(e.key==='Enter'||e.key===' ')pa();if(e.key==='u'||e.key==='U')pul()}});
 
-smm();
 </script>
 </body>
 </html>

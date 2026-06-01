@@ -1420,6 +1420,82 @@ def api_profile_migrate():
     if pid:ACTIVE_PROFILE_ID=pid;player=load_profile(pid)
     return jsonify({"ok":pid is not None,"profile_id":pid})
 
+# ═══ 账号密码认证 ═══
+AUTH_FILE = os.path.join(SAVE_DIR, "auth.json")
+
+def load_auth():
+    if os.path.exists(AUTH_FILE):
+        try:
+            with open(AUTH_FILE,'r',encoding='utf-8') as f:return json.load(f)
+        except:pass
+    return {}
+
+def save_auth(data):
+    with open(AUTH_FILE,'w',encoding='utf-8') as f:json.dump(data,f,ensure_ascii=False,indent=2)
+
+def hash_password(pw):
+    return hashlib.sha256(pw.encode('utf-8')).hexdigest()
+
+@app.route('/api/auth/register',methods=['POST'])
+def api_auth_register():
+    global player, ACTIVE_PROFILE_ID
+    import uuid,datetime
+    d=request.get_json(force=True,silent=True) or {}
+    username=(d.get("username") or "").strip()
+    password=(d.get("password") or "").strip()
+    if not username or len(username)<2:return jsonify({"ok":False,"error":"用户名至少2个字符"})
+    if not password or len(password)<3:return jsonify({"ok":False,"error":"密码至少3个字符"})
+    auth=load_auth()
+    # 检查用户名是否已存在
+    for pid,info in auth.items():
+        if info.get("username")==username:
+            return jsonify({"ok":False,"error":"用户名已被注册"})
+    pid=str(uuid.uuid4())[:8]
+    c=Character(name=username,gender=d.get("gender","男"))
+    if d.get("avatar"):c.avatar=d["avatar"]
+    c.init_battle()
+    now=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    save_profile(c,pid)
+    profiles=load_profiles()
+    profiles["profiles"].append({"id":pid,"display_name":username,"created_at":now,"updated_at":now,"level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
+    profiles["active_profile_id"]=pid
+    save_profiles(profiles)
+    auth[pid]={"username":username,"password_hash":hash_password(password),"created_at":now}
+    save_auth(auth)
+    ACTIVE_PROFILE_ID=pid;player=c
+    return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd()})
+
+@app.route('/api/auth/login',methods=['POST'])
+def api_auth_login():
+    global player, ACTIVE_PROFILE_ID
+    d=request.get_json(force=True,silent=True) or {}
+    username=(d.get("username") or "").strip()
+    password=(d.get("password") or "").strip()
+    if not username or not password:return jsonify({"ok":False,"error":"请输入用户名和密码"})
+    auth=load_auth()
+    for pid,info in auth.items():
+        if info.get("username")==username:
+            if info.get("password_hash")==hash_password(password):
+                p=load_profile(pid)
+                if not p:return jsonify({"ok":False,"error":"存档数据丢失"})
+                profiles=load_profiles();profiles["active_profile_id"]=pid;save_profiles(profiles)
+                ACTIVE_PROFILE_ID=pid;player=p;player.init_battle()
+                return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd()})
+            else:
+                return jsonify({"ok":False,"error":"密码错误"})
+    return jsonify({"ok":False,"error":"用户名不存在"})
+
+@app.route('/api/auth/logout',methods=['POST'])
+def api_auth_logout():
+    global player, ACTIVE_PROFILE_ID
+    player=None;ACTIVE_PROFILE_ID=None
+    return jsonify({"ok":True})
+
+@app.route('/api/auth/status')
+def api_auth_status():
+    global player
+    return jsonify({"ok":True,"logged_in":player is not None,"username":player.name if player else None})
+
 # ═══ Bot + 聊天 + 公告 API ═══
 @app.route('/api/bots')
 def api_bots():
