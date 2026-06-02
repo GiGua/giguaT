@@ -373,6 +373,16 @@ def generate_bots(count=50):
 
 def simulate_bot_actions(steps=1):
     """模拟bot行为,返回聊天和公告"""
+    # 扩充消息池(每次调用复用)
+    if 'CHAT_POOLS' not in globals():
+        globals()['CHAT_POOLS'] = {
+            "arena": ["今天手感不错！","这局打得激烈","有人来一把吗？","看我的新武器！","刚刚拿了个三杀！","这把匹配的对手好强","竞技场排名又掉了","今天拿了几连胜","来切磋一把？","战力终于破千了","这把运气真好","被暴击秒了","我Rating多少了","有人一起排吗","这届竞技场好卷","又来练手了","今天要冲王者","竞技场日常打卡","求轻虐","差点就赢了"],
+            "pot": ["开罐真刺激！","这次运气不错","又没出好东西…","攒罐子等下次","刚开出个神器！","50连开了，就一个橙","金罐概率太低了","碎片攒够了吗","求欧气","今天适合开罐","有人出过神话吗","罐子全空了","终于出传说了","开罐上瘾了","银罐也不错的","金色传说！","我是不是该去洗脸","连开十个蓝天白云","今天罐子爆率好低","老板再来一罐"],
+            "world": ["今天天气不错","大家都在干嘛呢","强化好难啊","副本掉落太看脸了","排行榜又更新了","新人求带副本","商店上新武器了","有没有公会收人","这游戏真好玩","大佬们好","萌新报道","战力怎么提升快","金币不够用了","强化石去哪刷","求副本攻略","有人出神话武器吗","这游戏太肝了","休闲玩家路过","今天签到领了什么","晚上人多吗","周末有活动吗","武器碎片好难攒","装备怎么搭配","强化到+15要多少石头","战力排行榜第一是谁","副本boss怎么打","竞技场遇到大佬了","有没有速刷攻略","今天运气爆棚","肝帝的一天开始了"],
+            "dungeon": ["副本好难","刚通关了！","这boss太猛了","掉落不错","翻卡翻到神器！","副本奖励还行","又跪在boss关了","求组队打副本","今天副本刷什么","几维鸟好可爱","深渊副本有人过吗","副本经验真多","掉落概率太低了","终于通关深谷了","副本金币真香","草窝副本最简单","火山坡好难","大佬带带副本","今天刷了多少次","副本一天能打几次"],
+            "enhance": ["强化失败了好多次","强化成功+12了！","强化石不够用","求强化技巧","终于+15了","武器强化太烧金币","强化概率是假的吧","连碎5次了","有人能帮强化吗","今天的强化运气不错","+10之后好难","强化材料去哪刷","有没有强化保底","强化让我破产了","今天成功+8了"],
+            "shop": ["商店上新了！","买个新武器试试","装备好贵","金币不够买","这个武器值不值","商店什么时候更新","攒钱中","买了把新武器","装备该换了","商店有打折吗"]
+        }
     data = load_bot_profiles()
     if not data["bots"]: data = generate_bots(50)
     import datetime as _dt
@@ -393,7 +403,7 @@ def simulate_bot_actions(steps=1):
                 mats["angel_hammer"] = mats.get("angel_hammer",0)+(1 if random.random()<0.35 else 0)
                 mats["angel_pot"] = mats.get("angel_pot",0)+(1 if random.random()<0.10 else 0)
                 mats["magic_can_fragment"] = mats.get("magic_can_fragment",0)+random.randint(0,3)
-                if random.random()<0.1: chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"arena","msg":random.choice(["今天手感不错！","这局打得激烈","有人来一把吗？","看我的新武器！"]),"is_bot":True})
+                if random.random()<0.1: chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"arena","msg":random.choice(CHAT_POOLS["arena"]),"is_bot":True})
             elif action == "dungeon":
                 bot["exp"] = bot.get("exp",0)+random.randint(20,80)
                 bot["gold"] = bot.get("gold",0)+random.randint(30,150)
@@ -405,7 +415,7 @@ def simulate_bot_actions(steps=1):
                     # 开出好东西时公告
                     if random.random()<0.03:
                         announcements.append({"time":now.isoformat(),"msg":f"🎉 恭喜【{bot['display_name']}】开启天使魔罐，获得神器！","type":"mythic"})
-                    if random.random()<0.1: chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"pot","msg":random.choice(["开罐真刺激！","这次运气不错","又没出好东西…","攒罐子等下次"]),"is_bot":True})
+                    if random.random()<0.1: chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"pot","msg":random.choice(CHAT_POOLS["pot"]),"is_bot":True})
             elif action == "enhance":
                 elv = bot.get("weapon_enhances",{}).get(bot.get("weapon_id","fire"),0)
                 if mats.get("enhance_small",0)>0:
@@ -415,7 +425,7 @@ def simulate_bot_actions(steps=1):
             elif action == "shop":
                 if bot["gold"]>200: bot["gold"]-=random.randint(50,200)
             elif action == "chat":
-                chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"world","msg":random.choice(["今天天气不错","大家都在干嘛呢","强化好难啊","副本掉落太看脸了","排行榜又更新了"]),"is_bot":True})
+                chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"world","msg":random.choice(CHAT_POOLS["world"]),"is_bot":True})
             bot["materials"]=mats
     
     # 更新战斗力
@@ -827,6 +837,31 @@ DUNGEONS = [
          {"type":"weapon","ids":["godpunish_missile"],"rate":0.005,"label":"🔴神罚多重导弹(0.5%神话)"},
          {"type":"weapon","ids":["legend_boom","legend_fire"],"rate":0.02,"label":"传说武器(1.5%)"},
          {"type":"weapon","ids":["god_fire","god_boom","god_wind","god_lightning"],"rate":0.10,"label":"神器武器(10%)"},
+     ]},
+    # ═══ 40+ 高级副本(碎片掉落为主) ═══
+    {"id":"dragon_grave","name":"龙骸荒原","lv":40,"desc":"远古龙骸散落荒原，高阶碎片在此凝聚",
+     "stages":[{"name":"龙骨入口","n":2,"d":"hard"},{"name":"龙息裂谷","n":3,"d":"hard"},{"name":"龙骸王座","n":1,"d":"hard","boss":True}],
+     "rw":{"coins":(3000,6000),"exp":(2000,3500),"stone":"large","stone_n":(3,6)},
+     "drops":[
+         {"type":"weapon","ids":["god_fire","god_boom","god_wind","god_lightning"],"rate":0.15,"label":"神器武器(15%)"},
+         {"type":"weapon","ids":["thunder_judge","abyss_crossbow","blackhole_cannon","seraphim_railgun"],"rate":0.03,"label":"神话武器(3%)"},
+         {"type":"equip","ids":["phoenix_crown","dragon_chest","shadow_boots","star_pendant"],"rate":0.15,"label":"神器装备"},
+     ]},
+    {"id":"phoenix_peak","name":"凤羽天阶","lv":45,"desc":"凤羽几维鸟涅槃之地，传说碎片如雨般散落",
+     "stages":[{"name":"天阶入口","n":2,"d":"hard"},{"name":"凤羽回廊","n":3,"d":"hard"},{"name":"涅槃祭坛","n":1,"d":"hard","boss":True}],
+     "rw":{"coins":(4000,8000),"exp":(3000,5000),"stone":"large","stone_n":(4,8)},
+     "drops":[
+         {"type":"weapon","ids":["god_fire","god_boom","god_wind","god_lightning","legend_boom","legend_fire"],"rate":0.18,"label":"传说/神器武器(18%)"},
+         {"type":"weapon","ids":["chaos_dice","mecha_fist","eclipse_scythe","godpunish_missile"],"rate":0.04,"label":"神话武器(4%)"},
+         {"type":"equip","ids":["phoenix_crown","dragon_chest","shadow_boots","star_pendant"],"rate":0.20,"label":"神器装备(20%)"},
+     ]},
+    {"id":"godfall_abyss","name":"神陨深渊","lv":50,"desc":"众神陨落之地，最强神话武器与海量碎片等待勇者",
+     "stages":[{"name":"深渊边缘","n":2,"d":"hard"},{"name":"神骸走廊","n":3,"d":"hard"},{"name":"神陨核心","n":1,"d":"hard","boss":True}],
+     "rw":{"coins":(5000,12000),"exp":(4000,7000),"stone":"large","stone_n":(5,10)},
+     "drops":[
+         {"type":"weapon","ids":["thunder_judge","abyss_crossbow","blackhole_cannon","seraphim_railgun","chaos_dice","mecha_fist","eclipse_scythe","godpunish_missile"],"rate":0.06,"label":"神话武器(6%)"},
+         {"type":"weapon","ids":["legend_boom","legend_fire","god_fire","god_boom","god_wind","god_lightning"],"rate":0.22,"label":"传说/神器武器(22%)"},
+         {"type":"equip","ids":["phoenix_crown","dragon_chest","shadow_boots","star_pendant"],"rate":0.25,"label":"神器装备(25%)"},
      ]},
 ]
 

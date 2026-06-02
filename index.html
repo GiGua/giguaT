@@ -151,6 +151,26 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
   #chat-panel.mobile-collapsed #chat-compose{display:none}
   #btn-chat-toggle{display:inline-block!important}
 }
+/* 翻牌系统 */
+.reward-grid{display:flex;gap:10px;justify-content:center;flex-wrap:nowrap;margin:12px 0}
+.reward-card{width:100px;height:140px;perspective:600px;cursor:pointer;flex-shrink:0}
+.reward-card-inner{position:relative;width:100%;height:100%;transition:transform 0.4s;transform-style:preserve-3d}
+.reward-card.flipped .reward-card-inner{transform:rotateY(180deg)}
+.reward-card-front{position:absolute;width:100%;height:100%;backface-visibility:hidden;background:linear-gradient(135deg,#1a1a2e,#2a2a40);border:2px solid #3a3a5a;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:30px;box-shadow:0 0 10px rgba(100,100,180,.15)}
+.reward-card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;transform:rotateY(180deg);background:linear-gradient(135deg,#12122a,#1a1a3e);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;padding:5px;text-align:center;border:2px solid #3a3a5a;box-shadow:0 0 15px rgba(100,100,200,.2)}
+.reward-icon{font-size:20px;margin-bottom:2px}
+.reward-name{font-weight:700;margin:3px 0;font-size:11px;line-height:1.2}
+.reward-n{color:var(--dim);font-size:10px}
+.reward-quality{font-size:9px;margin-top:2px}
+.reward-card.missed{opacity:.3;filter:grayscale(.8);pointer-events:none}
+#btn-auto{background:linear-gradient(135deg,#444,#666)}
+#btn-auto.active{background:linear-gradient(135deg,#ff6600,#ff8800);animation:pulse 1s infinite}
+@keyframes flipIn{0%{transform:rotateY(0)}100%{transform:rotateY(180deg)}}
+@media(max-width:800px){
+  .reward-grid{display:grid;grid-template-columns:repeat(2,100px);justify-content:center;gap:12px}
+  .reward-card{width:100px;height:140px}
+  #btn-chat-toggle{display:inline-block!important}
+}
 </style>
 </head>
 <body>
@@ -540,7 +560,7 @@ function rbs(){
   <div id="battle-canvas-wrap"><canvas id="battle-canvas" width="660" height="100"></canvas></div>
   <div style="text-align:center;font-size:13px;margin:4px 0">距离:<b style="color:var(--cyan)">${battle.distance}m</b> | 风力:<b style="color:${battle.wind>0?'var(--cyan)':'var(--purple)'}">${battle.wind>0?'→':battle.wind<0?'←':''} ${Math.abs(battle.wind)}</b> | 回合:<b>${battle.turn||1}</b></div>
   <div style="text-align:center;color:var(--dim);font-size:11px">${isBot?'⚔️ 真人竞技镜像会根据Rating成长':'⚡ AI自动计算最优弹道'}</div>
-  <div class="action-row"><button class="btn btn-c btn-lg" onclick="pa()" id="btn-fire">🚀 发射！</button><button class="btn btn-o btn-lg" onclick="pul()" id="btn-ult" disabled>💢 必杀技(怒气${player.rage||0}/100)</button></div></div>`;
+  <div class="action-row"><button class="btn btn-c btn-lg" onclick="pa()" id="btn-fire">🚀 发射！</button><button class="btn btn-o btn-lg" onclick="pul()" id="btn-ult" disabled>💢 必杀技(怒气${player.rage||0}/100)</button><button class="btn btn-lg" id="btn-auto" onclick="toggleAuto()">🤖 自动战斗</button></div></div>`;
   setTimeout(dbf,100);uub()}
 
 
@@ -606,6 +626,36 @@ async function pul(){if(player.rage<100)return;const r=await api((battle&&battle
   battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage;player.hp=r.player_hp;rsb();rbs();
   addLog(r.msg,'cr');document.getElementById('content').classList.add('crit-flash');setTimeout(()=>document.getElementById('content').classList.remove('crit-flash'),300);setTimeout(at,1500)}
 
+// ═══════════════ 自动战斗 ═══════════════
+let autoBattle=false;let autoTimer=null;
+function toggleAuto(){
+  autoBattle=!autoBattle;
+  const btn=document.getElementById('btn-auto');
+  if(autoBattle){
+    btn.textContent='⏹ 停止自动';btn.classList.add('active');
+    addLog('🤖 已开启自动战斗');
+    autoStep();
+  }else{
+    btn.textContent='🤖 自动战斗';btn.classList.remove('active');
+    if(autoTimer)clearTimeout(autoTimer);autoTimer=null;
+    addLog('🤖 已停止自动战斗');
+  }
+}
+function autoStep(){
+  if(!autoBattle||!battle){autoTimer=null;return}
+  if(battle.player_hp<=0||battle.enemy_hp<=0){
+    autoBattle=false;autoTimer=null;
+    const btn=document.getElementById('btn-auto');
+    if(btn){btn.textContent='🤖 自动战斗';btn.classList.remove('active')}
+    return;
+  }
+  const btn=document.getElementById('btn-fire');
+  if(!btn||btn.disabled){autoTimer=setTimeout(autoStep,500);return}
+  pa().finally(()=>{
+    if(autoBattle)autoTimer=setTimeout(autoStep,1000+Math.random()*500);
+  });
+}
+
 function markBattleOver(over){
   const c=document.getElementById('content');
   if(over==='victory'){
@@ -643,28 +693,27 @@ function showCardFlip(dr){
   const cards=(dr.cards||[]).slice(0,5);const cr=dr.coins_reward||0;const er=dr.exp_reward||0;
   let html=`<div class="fade-in" style="text-align:center">
     <h2 style="color:var(--yellow)">🏆 副本通关！</h2>
-    <p style="color:var(--dim)">💰 +${cr}金币 | ⭐ +${er}经验</p>
+    <p style="color:var(--dim);font-size:13px">💰 +${fmtNum(cr)}金币 | ⭐ +${fmtNum(er)}经验</p>
     <p style="font-size:12px;color:var(--purple);margin:8px 0">点击卡牌翻面，最多翻2张</p>
-    <div class="card-grid" style="display:flex;gap:10px;justify-content:center;flex-wrap:nowrap;overflow-x:auto;margin:12px 0">`;
+    <div class="reward-grid">`;
   cards.forEach((c,i)=>{
     const rarityColors={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'};
-    const rarityGlow={common:'none',rare:'0 0 12px #00ff66',epic:'0 0 20px #cc44ff',legend:'0 0 30px #ff8800',mythic:'0 0 40px #ff3333,0 0 80px #ff0000'};
-    const rc=rarityColors[c.rarity]||'#888';const rg=rarityGlow[c.rarity]||'none';
-    html+=`<div class="card-flip" id="card-${i}" onclick="flipCard(${i})" style="width:100px;height:140px;perspective:600px;cursor:pointer">
-      <div class="card-inner" id="card-inner-${i}" style="position:relative;width:100%;height:100%;transition:transform 0.6s;transform-style:preserve-3d">
-        <div class="card-front" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;background:linear-gradient(135deg,#1a1a2e,#2a2a40);border:2px solid ${rc};border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:${rg}">❓</div>
-        <div class="card-back" style="position:absolute;width:100%;height:100%;backface-visibility:hidden;transform:rotateY(180deg);background:linear-gradient(135deg,#12122a,#1a1a3e);border:2px solid ${rc};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;padding:6px;text-align:center;box-shadow:${rg}">
-          <div style="font-size:${c.rarity==='mythic'?'28px':'20px'}">${c.icon||'🎁'}</div>
-          <div style="color:${rc};font-weight:700;margin:4px 0">${c.name||'材料'}</div>
-          ${c.n?`<div style="color:var(--dim)">×${c.n}</div>`:''}
-          ${c.quality_tag?`<div style="font-size:10px;color:${rc}">${c.quality_tag}</div>`:''}
+    const rc=rarityColors[c.rarity]||'#888';
+    html+=`<div class="reward-card" id="card-${i}" onclick="flipCard(${i})">
+      <div class="reward-card-inner" id="card-inner-${i}">
+        <div class="reward-card-front">❓</div>
+        <div class="reward-card-back" style="border-color:${rc}">
+          <div class="reward-icon" style="font-size:${c.rarity==='mythic'?'26px':'18px'}">${c.icon||'🎁'}</div>
+          <div class="reward-name" style="color:${rc}">${c.name||'材料'}</div>
+          ${c.n?`<div class="reward-n">×${c.n}</div>`:''}
+          ${c.quality_tag?`<div class="reward-quality" style="color:${rc}">${c.quality_tag}</div>`:''}
           ${c.type==='weapon'||c.type==='equip'?`<button class="btn btn-sm btn-c" onclick="event.stopPropagation();equipDrop('${c.id}','${c.type}')" style="margin-top:4px;font-size:10px">装备</button>`:''}
         </div>
       </div>
-</div></div>`;
+    </div>`;
   });
   html+=`</div>
-    <p id="flip-tip" style="font-size:10px;color:var(--dim)">已翻 0/2 张，翻开的装备可立即装备</p>
+    <p id="flip-tip" style="font-size:10px;color:var(--dim);margin:10px 0">已翻 0/2 张，翻开的装备可立即装备</p>
     <button class="btn btn-c" onclick="closeModal();checkDungeonNext()">继续</button>
     <button class="btn btn-sm" onclick="flipRandomTwo()" style="margin-left:8px">随机翻2张</button>
   </div>`;
@@ -673,24 +722,17 @@ function showCardFlip(dr){
 }
 
 function flipCard(i){
-  const inner=document.getElementById('card-inner-'+i);
   const card=document.getElementById('card-'+i);
-  if(!inner||!card)return;
+  if(!card)return;
   if(card.dataset.flipped==='1')return;
   if(flippedCardCount>=2)return;
   card.dataset.flipped='1';flippedCardCount++;
-  inner.style.transform='rotateY(180deg)';
-  card.style.animation='cardPulse 0.6s ease';
+  card.classList.add('flipped');
   const tip=document.getElementById('flip-tip');if(tip)tip.textContent=`已翻 ${flippedCardCount}/2 张`;
-  // 翻满2张后，剩余3张显示漏光
   if(flippedCardCount>=2){
     for(let j=0;j<5;j++){
       const c=document.getElementById('card-'+j);
-      if(c&&c.dataset.flipped!=='1'){
-        c.style.opacity='0.3';c.style.filter='grayscale(0.8)';
-        c.style.pointerEvents='none';
-        c.title='已错过';
-      }
+      if(c&&c.dataset.flipped!=='1'){c.classList.add('missed');c.title='已错过'}
     }
   }
 }
