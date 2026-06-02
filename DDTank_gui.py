@@ -1121,7 +1121,7 @@ class Character:
     @property
     def crit_dmg(self): b=self.weapon.crit_dmg_bonus if self.weapon else 0; return 1.5+b
     @property
-    def power(self): return self.atk*2+self.defense*2+self.agility+self.luk+self.wdmg*3+self.maxhp//5
+    def power(self): return calculate_combat_power(self)["total"]
     @property
     def exp_need(self): return int(30*self.level*(1+self.level*0.6))
 
