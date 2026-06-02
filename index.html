@@ -1096,6 +1096,16 @@ async function openCan(type,count){
   // 等满3秒
   await new Promise(r=>setTimeout(r,3000-(flashIdx*200)));
   clearInterval(flashInterval);
+  // 定格显示结果2秒
+  document.getElementById('jar-anim').style.animation='none';
+  document.getElementById('jar-anim').textContent='🎁';
+  let resultText='';
+  if(r.ok&&r.rewards){
+    r.rewards.forEach(rw=>{rw.items.forEach(item=>{resultText+=item.name+(item.n?' ×'+item.n:'')+' ');});});
+  }else{resultText=r.error||'开启失败';}
+  document.getElementById('jar-flash').textContent=resultText||'获得神秘奖励';
+  document.getElementById('jar-flash').style.color='#ffcc00';
+  await new Promise(r=>setTimeout(r,2000));
   document.body.removeChild(jarOverlay);
   btns.forEach(b=>b.disabled=false);
   if(!r.ok){alert(r.error);return}

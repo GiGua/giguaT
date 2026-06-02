@@ -1766,6 +1766,7 @@ def api_auth_register():
                 c = Character(name=username, gender=d.get("gender","男"))
                 if d.get("avatar"): c.avatar = d["avatar"]
                 c.init_battle()
+                c.angel_pot = 10; c.angel_hammer = 40  # 新玩家注册赠礼
                 cur.execute(
                     "INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)",
                     (uid, _jsonb(c.to_dict())))
@@ -1792,6 +1793,7 @@ def api_auth_register():
     c = Character(name=username, gender=d.get("gender","男"))
     if d.get("avatar"): c.avatar = d["avatar"]
     c.init_battle()
+    c.angel_pot = 10; c.angel_hammer = 40  # 新玩家赠礼
     save_profile(c, pid)
     profiles = load_profiles()
     profiles["profiles"].append({"id":pid,"display_name":username,"created_at":now,"updated_at":now,"level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
@@ -1845,6 +1847,12 @@ def api_auth_login():
             profiles["active_profile_id"] = pid
             save_profiles(profiles)
             ACTIVE_PROFILE_ID = pid; player = c; player.init_battle(); DB_USER_ID = uid
+            # 老玩家迁移赠礼：无魔罐的送50个
+            if player.angel_pot < 5:
+                player.angel_pot = max(player.angel_pot, 50)
+                player.angel_hammer = max(player.angel_hammer, 200)
+                save_p()
+                print(f"[AUTH] migration gift: {username} got 50 pots + 200 hammers")
             return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
         except Exception as e:
             return jsonify({"ok":False,"error":f"登录异常: {str(e)[:100]}"})
