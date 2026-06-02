@@ -444,6 +444,9 @@ function rsb(){
     <div class="sr"><span class="sl">敏捷</span><span class="sv" style="color:var(--green)">${p.agility}</span></div>
     <div class="sr"><span class="sl">幸运</span><span class="sv" style="color:var(--purple)">${p.luk}</span></div>
     <div class="sep"></div>
+    <div class="sr"><span class="sl">⚡伤害</span><span class="sv" style="color:#ff8800;font-weight:900;font-size:13px">${p.wdmg||0}</span></div>
+    <div class="sr"><span class="sl">🛡️护甲</span><span class="sv" style="color:#00e5ff;font-weight:900;font-size:13px">${Math.floor((p.defense||0)*0.5)}</span></div>
+    <div class="sep"></div>
     <div style="color:var(--yellow);font-size:11px">⚔️ ${p.weapon_name}+${p.enhance}</div>
     <div style="margin:5px 0">${cpBadge(p.power)}</div>
     <div class="sep"></div>
