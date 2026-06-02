@@ -2537,11 +2537,11 @@ def api_angel_can_open():
             if rarity in ("legend","mythic"):st["since_legend"]=0
             else:st["since_legend"]=st.get("since_legend",0)+1
         
-        # 保底赠送
+        # 保底赠送（用更新后的值）
         bonus_silver=0;bonus_gold=0
-        ao=player.angel_stats.get("angel_open",0)
-        if ao%10==0 and ao>0:bonus_silver=1;player.silver_pot+=1
-        if ao%100==0 and ao>0:bonus_gold=1;player.gold_pot+=1
+        total_opens = player.angel_stats.get("angel_open",0)
+        if total_opens % 10 == 0 and total_opens > 0: bonus_silver=1; player.silver_pot+=1
+        if total_opens % 100 == 0 and total_opens > 0: bonus_gold=1; player.gold_pot+=1
         
         save_p()
         # 真人玩家获得传说/神话奖励时，同步到公屏聊天

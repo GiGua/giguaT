@@ -609,9 +609,9 @@ async function pa(){console.log('[PA] playerAttack called');if(!battle)return;
   try{
     const r=await api((battle&&battle.battle_type==='bot_pvp')?'/api/bot_battle/player_act':'/api/player_act',{auto:true});console.log('[PA] response:',r);
     if(r.over){console.log('[PA] battle over:',r.over);eb(r);return}
-    battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage;player.hp=r.player_hp;rsb();rbs();
-    if(r.auto_angle)addLog(`⚡ AI: ${r.auto_formula||'自由'} 角度${r.auto_angle}° 力度${r.auto_power} | ${r.msg}`);
-    else addLog(`${r.msg} | 你:${r.player_hp}/${player.maxhp} 敌:${r.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'pl');
+    battle.player_hp=r.player_hp??battle.player_hp;battle.enemy_hp=r.enemy_hp??battle.enemy_hp;battle.turn=(battle.turn||1)+1;player.rage=r.player_rage??player.rage;player.hp=r.player_hp??player.hp;rsb();rbs();
+    if(r.auto_angle)addLog(`⚡ AI: ${r.auto_formula||'自由'} 角度${r.auto_angle}° 力度${r.auto_power}`);
+    else addLog(`${r.msg||'攻击'} | 你:${battle.player_hp}/${player.maxhp} 敌:${battle.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'pl');
     if(r.enemy_line)showDialogue(r.enemy_line);
     const isCrit=(r.log||[]).slice(-1)[0]?.crit||false;
     animShotEx(r.dmg||0,isCrit);
@@ -628,9 +628,9 @@ async function at(){console.log('[AT] ai_turn called | battle='+!!battle+' pHP='
   try{
     const r=await api((battle&&battle.battle_type==='bot_pvp')?'/api/bot_battle/ai_act':'/api/ai_act',{});console.log('[AT] ai_act response:',r);
     if(r.over){console.log('[AT] battle over:',r.over);eb(r);return}
-    battle.player_hp=r.player_hp;battle.enemy_hp=r.enemy_hp;player.hp=r.player_hp;rsb();rbs();
+    battle.player_hp=r.player_hp??battle.player_hp;battle.enemy_hp=r.enemy_hp??battle.enemy_hp;player.hp=r.player_hp??player.hp;rsb();rbs();
     if(r.enemy_line)showDialogue(r.enemy_line);
-    addLog(`🔴 ${r.msg} | 你:${r.player_hp}/${player.maxhp} 敌:${r.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'en');
+    addLog(`🔴 ${r.msg||'攻击'} | 你:${battle.player_hp}/${player.maxhp} 敌:${battle.enemy_hp}/${enemyData.maxhp}`,(r.log||[]).slice(-1)[0]?.crit?'cr':'en');
     document.getElementById('content').classList.add('shake');
     setTimeout(()=>document.getElementById('content').classList.remove('shake'),300);
     // 恢复按钮
