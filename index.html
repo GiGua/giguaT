@@ -1202,248 +1202,121 @@ async function startBotBattle(botId){
   addLog('⚔️ 真人对战开始：'+enemyData.name+' Lv.'+enemyData.level+' 战斗力'+(enemyData.combat_power||'')+' Rating '+(enemyData.rating||1000));
 }
 
-// ═══════════════ 星蚀试炼塔 (路线地图版) ═══════════════
-let rogueRun=null,rogueMapNode=null;
+// ═══════════════ 星蚀试炼塔 v2 (难度选择→地图→战斗) ═══════════════
+let rogueRun=null;
 const NC={'monster':'#4a90d9','elite':'#cc44ff','event':'#ffaa00','item':'#44cc66','card':'#9966ff','shop':'#ffcc00','rest':'#44cccc','boss':'#cc2222'};
 const NI={'monster':'⚔️','elite':'💀','event':'❓','item':'🎁','card':'🃏','shop':'🏪','rest':'🔥','boss':'👑'};
 
 async function srogue(){
   const r=await api('/api/rogue/info');
-  if(!r.ok){alert(r.error);return}
+  if(!r.ok){alert(r.error||'加载失败');return}
   rogueRun=r.rogue_run;
-  let h=`<div class="fade-in"><h2>🗼 星蚀试炼塔</h2>
-  <p style="color:var(--dim)">战力: <b>${r.player_power}</b> | 入场要求: <b>${r.min_power}</b> | 
-  今日免费: <b>${r.free_remaining||0}</b> | 🔑钥匙: <b>${r.keys||0}</b></p>`;
-  
-  if(rogueRun&&rogueRun.active){
-    h+=`<div class="card" style="background:var(--bg3);border-color:var(--purple);margin-bottom:6px">
-      <b>进行中</b> | 第${rogueRun.current_floor}层 | 已选卡:${(rogueRun.selected_cards||[]).length}张 |
-      累计💰${rogueRun.accumulated_rewards?.gold||0} ⭐${rogueRun.accumulated_rewards?.exp||0}<br>
-      <button class="btn btn-c" onclick="rogueShowMap()">🗺 查看地图</button>
-      <button class="btn btn-r btn-sm" onclick="rogueRetire()">退出结算</button></div>`;
-    rogueShowMap();
-  }else if(r.can_enter){
-    h+=`<button class="btn btn-c btn-lg" onclick="rogueStart()">🚀 开始试炼</button>`;
-    h+=`<p style="font-size:10px;color:var(--dim)">20层路线选择式肉鸽爬塔·每天1次免费</p>`;
-    document.getElementById('content').innerHTML=h+'</div>';
-  }else{
-    if(r.player_power<r.min_power)h+=`<p style="color:var(--red)">你的战斗力不足，星蚀试炼塔最低需要${r.min_power}战斗力</p>`;
-    else h+=`<p style="color:var(--red)">今日次数已用完，需要星蚀钥匙才能继续</p>`;
-    document.getElementById('content').innerHTML=h+'</div>';
-  }
+  if(rogueRun&&rogueRun.active){rogueShowMap();}else{showRogueTierSelect(r);}
+}
+
+function showRogueTierSelect(r){
+  let h='<div class="fade-in"><h2>🗼 星蚀试炼塔</h2>';
+  h+='<p style="color:var(--dim);margin-bottom:8px">选择试炼强度。难度越高,敌人越强,奖励越高。<br>战力: <b>'+r.player_power+'</b> | 无次数限制,无需钥匙</p>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px">';
+  (r.tiers||[]).forEach(t=>{
+    const under=t.recommended_power>r.player_power;
+    const dc=t.danger==='终焉'?'#cc2222':t.danger==='噩梦'?'#cc00ff':t.danger==='极危'?'#ff6600':t.danger==='危险'?'#ffaa00':'#4a90d9';
+    h+='<div class="card" style="cursor:pointer;border-color:'+dc+';padding:6px;'+(under?'background:rgba(200,0,0,0.1)':'')+'" onclick="rogueStartTier('+t.tier+')">';
+    h+='<b style="color:'+dc+'">第'+t.tier+'难度</b><br>';
+    h+='<span style="font-size:10px">战力: '+t.recommended_power+'</span><br>';
+    h+='<span style="font-size:9px;color:var(--dim)">奖励: x'+t.reward_mult+'</span><br>';
+    h+='<span style="font-size:9px;color:'+(under?'var(--red)':'var(--green)')+'">'+t.danger+(under?' ⚠战力不足':'')+'</span></div>';
+  });
+  h+='</div></div>';document.getElementById('content').innerHTML=h;
+}
+
+async function rogueStartTier(tier){
+  if(!confirm('开始第'+tier+'难度试炼?'))return;
+  const r=await api('/api/rogue/start',{tier:tier});
+  if(!r.ok){alert(r.error);srogue();return}
+  rogueRun=r.rogue_run;srogue();
 }
 
 function rogueShowMap(){
   if(!rogueRun||!rogueRun.map)return;
-  const map=rogueRun.map;
-  const avail=rogueRun.available_node_ids||[];
-  const done=rogueRun.completed_node_ids||[];
-  const maxFloor=Math.max(...map.map(n=>n.floor));
-  
-  let h='<div style="position:relative;padding:8px;overflow-x:auto">';
-  h+='<div style="display:flex;flex-direction:column;gap:2px">';
-  
-  for(let f=1;f<=maxFloor;f++){
-    const nodes=map.filter(n=>n.floor===f);
-    h+=`<div style="display:flex;align-items:center;gap:4px;min-height:42px">`;
-    h+=`<span style="width:32px;font-size:10px;color:var(--dim);text-align:right">${f}F</span>`;
-    h+=`<div style="display:flex;gap:6px;flex:1;justify-content:center;flex-wrap:wrap">`;
-    nodes.forEach(n=>{
-      const isDone=done.includes(n.id);
-      const isAvail=avail.includes(n.id);
-      const color=NC[n.type]||'#888';
-      const icon=NI[n.type]||'?';
-      const style=isDone?'opacity:0.5;cursor:default':
-        isAvail?`cursor:pointer;box-shadow:0 0 8px ${color}`:
-        'opacity:0.3;cursor:not-allowed';
-      const onclick=isAvail?`onclick="rogueEnterNode('${n.id}')"`:'';
-      h+=`<div ${onclick} style="width:48px;height:48px;border-radius:50%;border:2px solid ${color};
-        background:${isDone?'#333':isAvail?'rgba('+hexToRgb(color)+',0.2)':'#1a1a2e'};
-        display:flex;align-items:center;justify-content:center;font-size:20px;${style}"
-        title="${n.title} (${n.type})">${icon}</div>`;
-    });
-    h+=`</div></div>`;
-  }
-  h+='</div></div>';
-  
-  const cur=rogueRun.current_floor;
+  const map=rogueRun.map,avail=rogueRun.available_node_ids||[],done=rogueRun.completed_node_ids||[];
+  const tier=rogueRun.tier||1;
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:8px">';
+  map.forEach(n=>{
+    const isDone=done.includes(n.id),isAvail=avail.includes(n.id);
+    const color=NC[n.type]||'#888',icon=NI[n.type]||'?';
+    const style=isDone?'opacity:0.45;cursor:default':isAvail?'cursor:pointer;box-shadow:0 0 10px '+color:'opacity:0.25;cursor:not-allowed';
+    const onclick=isAvail?'onclick="rogueEnterNode(\''+n.id+'\')"':'';
+    h+='<div '+onclick+' style="width:56px;height:56px;border-radius:50%;border:2px solid '+color+';background:'+(isDone?'#333':isAvail?'rgba('+hexToRgb(color)+',0.25)':'#1a1a2e')+';display:flex;align-items:center;justify-content:center;font-size:22px;'+style+'" title="'+n.title+'">'+icon+'</div>';
+  });
+  h+='</div>';
+  const logs=(rogueRun.logs||[]).slice(-10).map(l=>'<div style="font-size:9px;color:var(--dim);padding:1px 0">'+l+'</div>').join('');
   document.getElementById('content').innerHTML=
-    `<div class="fade-in"><h2>🗼 星蚀试炼塔 — 第${cur}层</h2>
-    <div id="rogue-enemy-visual"></div>
-    <p style="font-size:11px;color:var(--dim)">⚔️怪物 💀精英 ❓事件 🎁道具 🃏卡牌 🏪商店 🔥休息 👑Boss | 点击高亮节点进入</p>
-    ${h}
-    <div style="margin-top:8px;font-size:10px;color:var(--dim)">
-    已选卡: ${(rogueRun.selected_cards||[]).map(c=>`<span style="color:var(--yellow)">${c.name}</span>`).join(', ')||'无'}
-    | 道具: ${(rogueRun.temp_items||[]).map(t=>t.name).join(', ')||'无'}
-    | ⚡星蚀徽章: ${rogueRun.tokens||0}
-    </div></div>`;
+    '<div class="fade-in"><h2>🗼 第'+tier+'难度试炼</h2>'+
+    '<div style="color:var(--dim);font-size:10px;margin-bottom:4px">推荐战力:'+rogueRun.base_power+' | 进度:'+done.length+'/'+map.length+' | 💰'+(rogueRun.accumulated_rewards?.gold||0)+' ⭐'+(rogueRun.accumulated_rewards?.exp||0)+'</div>'+
+    '<div id="rogue-enemy-visual"></div>'+h+
+    '<div style="margin-top:6px;font-size:9px;color:var(--dim)"><b>已选卡:</b> '+(rogueRun.selected_cards||[]).map(c=>'<span style="color:var(--yellow)">'+c.name+'</span>').join(' ')+' | <b>道具:</b> '+(rogueRun.temp_items||[]).map(t=>t.name).join(' ')+' | ⚡'+(rogueRun.tokens||0)+'</div>'+
+    '<div style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b style="font-size:9px;color:var(--dim)">战斗日志:</b>'+logs+'</div>'+
+    '<button class="btn btn-r btn-sm" onclick="rogueRetire()" style="margin-top:6px">退出结算</button></div>';
 }
 
-function hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `${r},${g},${b}`}
-
-async function rogueStart(){
-  const r=await api('/api/rogue/start',{});
-  if(!r.ok){alert(r.error);srogue();return}
-  rogueRun=r.rogue_run;rogueShowMap();
-}
+function hexToRgb(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return r+','+g+','+b;}
 
 async function rogueEnterNode(nodeId){
-  const node=rogueRun.map.find(n=>n.id===nodeId);
-  if(!node)return;
-  
-  // 先请求 enter_node 获取房间详情
   const er=await api('/api/rogue/enter_node',{node_id:nodeId});
   if(!er.ok){alert(er.error);return}
   rogueRun=er.rogue_run;
-  
-  if(er.under_powered&&!confirm(`你的战斗力(${er.player_power})低于推荐值(${er.recommended_power})，是否仍要挑战?`))return;
-  
-  // 20层Boss警告
-  if(node.type==='boss'&&!rogueRun.warning_shown_floor20){
-    showModal('⚠ 星蚀终层：不可逆之门',
-      `<div style="color:var(--red);font-size:13px">
-      你已经抵达星蚀试炼塔的最深处。<br>
-      这里不是普通副本。<br>
-      第20层的敌人拥有接近当前版本极限的战斗力。<br>
-      它会连续攻击、恢复生命、压制怒气，并在低血量时进入狂暴状态。<br>
-      如果你的路线选择和卡牌构筑不够完整，你几乎没有胜算。<br><br>
-      推荐战力:120000 | 你的战力:${player.power}<br>
-      已选卡:${(rogueRun.selected_cards||[]).length}张</div>`,
-      '<button class="btn btn-c" onclick="closeModal();(async()=>{await api(\'/api/rogue/boss_warning\',{});rogueDoBattle()})()">继续挑战</button> <button class="btn btn-r btn-sm" onclick="closeModal();rogueRetire()">撤退</button>');
+  if(er.room_type==='boss'&&!rogueRun.warning_shown){
+    showModal('⚠ 终焉试炼','<div style="color:var(--red)">关底Boss<br>推荐战力:'+er.recommended_power+'<br>你的战力:'+player.power+'</div>',
+      '<button class="btn btn-c" onclick="closeModal();(async()=>{await api(\'/api/rogue/boss_warning\',{});rogueDoBattle()})()">挑战</button> <button class="btn btn-r btn-sm" onclick="closeModal()">取消</button>');
     return;
   }
-  
   switch(er.room_type){
-    case'monster':case'elite':case'boss':
-      if(er.battle_ready)rogueDoBattle();break;
-    case'event':
-      if(er.already_used){alert('此事件已触发过');return}
-      if(er.event)showRogueEvent(er.event);break;
-    case'item':
-      if(er.item){
-        let h=`<h3>🎁 ${er.item.name}</h3><p style="color:var(--dim)">${er.item.desc}</p>`;
-        h+=`<button class="btn btn-c" onclick="rogueItemClaim('${er.item.id}')">领取</button>`;
-        document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
-      }break;
-    case'card':
-      if(er.cards)showRogueCards(er.cards,'卡牌房选卡');break;
-    case'shop':
-      rogueShowShop(er);break;
-    case'rest':
-      rogueShowRest(er);break;
+    case'monster':case'elite':case'boss':if(er.battle_ready)rogueDoBattle();break;
+    case'event':if(er.already_used){alert('已触发过');return}if(er.event)showRogueEvent(er.event);break;
+    case'item':if(er.item)showModal('🎁',er.item.name+'<br>'+er.item.desc,'<button class="btn btn-c" onclick="rogueItemClaim(\''+er.item.id+'\')">领取</button>');break;
+    case'card':if(er.cards)showRogueCards(er.cards,'卡牌房选卡');break;
+    case'shop':rogueShowShop(er);break;
+    case'rest':rogueShowRest(er);break;
   }
 }
 
 async function rogueDoBattle(){
   const r=await api('/api/rogue/battle',{});
-  if(!r.ok){alert(r.error||r.msg||'星蚀试炼塔加载失败，请刷新页面重试');srogue();return}
+  if(!r.ok){alert(r.error||'战斗失败');srogue();return}
   rogueRun=r.rogue_run;
-  addLog(r.won?`🗼 第${r.floor}层 胜利！💰+${r.gold||0}`:`💀 第${r.floor}层 失败`);
-  if(r.skill_used)addLog(`🐦 敌人: ${r.skill_used.name}`);
   if(r.revive_msg)addLog(r.revive_msg);
-  
-  // 显示 kiwi GIF 敌人
+  if(r.skill_used)addLog('🐦 '+r.skill_used.name);
   if(r.enemy_sprite){
-    const hue=r.enemy_hue||0;const variant=r.enemy_variant||'normal';
-    const isFinalBoss=variant==='final_boss';
-    const cls=isFinalBoss?'final-kiwi-boss':'kiwi-enemy';
-    const filter=isFinalBoss?`hue-rotate(${hue}deg) saturate(2) contrast(1.25) drop-shadow(0 0 18px #b000ff)`:`hue-rotate(${hue}deg) saturate(1.4) brightness(1.05)`;
-    const name=r.node?.title||'敌人';
-    const nodeEl=document.getElementById('rogue-enemy-visual');
-    if(nodeEl)nodeEl.innerHTML=`<div class="rogue-enemy-wrap"><img class="${cls}" src="${r.enemy_sprite}" style="filter:${filter};--kiwi-hue:${hue}deg" alt="${name}"><div class="enemy-name">${name}</div></div>`;
+    const hue=r.enemy_hue||0,v=r.enemy_variant||'normal',isFB=v==='final_boss';
+    const cls=isFB?'final-kiwi-boss':'kiwi-enemy';
+    const filter=isFB?'hue-rotate('+hue+'deg) saturate(2) contrast(1.25) drop-shadow(0 0 18px #b000ff)':'hue-rotate('+hue+'deg) saturate(1.4) brightness(1.05)';
+    const el=document.getElementById('rogue-enemy-visual');
+    if(el)el.innerHTML='<div class="rogue-enemy-wrap"><img class="'+cls+'" src="'+r.enemy_sprite+'" style="filter:'+filter+';--kiwi-hue:'+hue+'deg"><div class="enemy-name">'+(r.node?.title||'敌人')+'</div></div>';
   }
-  
-  if(r.cleared){showModal('🏆 通关！','20层全部通关！<br>所有奖励已发放','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
-  if(!r.won){showModal('💀 试炼结束',`止步第${r.floor}层<br>累计💰${rogueRun.accumulated_rewards.gold} ⭐${rogueRun.accumulated_rewards.exp}`,'<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
-  
+  if(r.cleared){showModal('🏆 通关!','所有奖励已发放','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
+  if(!r.won){showModal('💀 失败','累计💰'+(rogueRun.accumulated_rewards?.gold||0)+' ⭐'+(rogueRun.accumulated_rewards?.exp||0),'<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
   if(r.cards&&r.cards.length>0){showRogueCards(r.cards,'战斗奖励选卡');return}
   rogueShowMap();
 }
 
-function showRogueCards(cards,title='选择卡牌'){
-  let h=`<h3>${title}</h3><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">`;
+function showRogueCards(cards,title){
+  title=title||'选择卡牌';let h='<h3>'+title+'</h3><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">';
   const qc={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'};
-  cards.forEach(c=>{h+=`<div class="card" style="cursor:pointer;border-color:${qc[c.quality]};width:140px" onclick="roguePickCard('${c.id}')"><b style="color:${qc[c.quality]}">${c.name}</b><br><span style="font-size:10px;color:var(--dim)">${c.desc}</span></div>`});
-  h+='</div>';
-  document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
+  cards.forEach(c=>{h+='<div class="card" style="cursor:pointer;border-color:'+qc[c.quality]+';width:140px" onclick="roguePickCard(\''+c.id+'\')"><b style="color:'+qc[c.quality]+'">'+c.name+'</b><br><span style="font-size:10px;color:var(--dim)">'+c.desc+'</span></div>'});
+  h+='</div>';document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
 }
-async function roguePickCard(cid){
-  await api('/api/rogue/pick_card',{card_id:cid});closeModal();
-  addLog('🃏 已选择卡牌');rogueShowMap();
-}
+async function roguePickCard(cid){await api('/api/rogue/pick_card',{card_id:cid});closeModal();rogueShowMap();}
+async function rogueEventChoice(evtId,chId){const r=await api('/api/rogue/event_choice',{event_id:evtId,choice_id:chId});if(!r.ok){alert(r.error);return}rogueRun=r.rogue_run;closeModal();rogueShowMap();}
+async function rogueItemClaim(itemId){const r=await api('/api/rogue/item_claim',{item_id:itemId});if(!r.ok){alert(r.error);return}rogueRun=r.rogue_run;closeModal();rogueShowMap();}
+async function rogueShopBuy(itemId){const r=await api('/api/rogue/shop_buy',{item_id:itemId});if(!r.ok){alert(r.error);return}rogueRun=r.rogue_run;rogueShowMap();}
+async function rogueShopLeave(){const r=await api('/api/rogue/shop_leave',{});rogueRun=r.rogue_run;rogueShowMap();}
+async function rogueRest(action,cardId){const r=await api('/api/rogue/rest',{action:action,card_id:cardId||''});if(!r.ok){alert(r.error);return}rogueRun=r.rogue_run;rogueShowMap();}
+async function rogueRetire(){await api('/api/rogue/retire',{});srogue();}
+function showRogueEvent(evt){let h='<h3>❓ '+evt.title+'</h3><p style="color:var(--dim);font-size:11px">'+evt.desc+'</p>';evt.choices.forEach(c=>{h+='<button class="btn btn-c" style="margin:4px;width:100%" onclick="rogueEventChoice(\''+evt.id+'\',\''+c.id+'\')">'+c.text+'</button>'});document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
+function rogueShowShop(r){let h='<h3>🏪 交易所</h3><p style="font-size:10px">⚡'+(rogueRun.tokens||0)+'</p>';(r.shop_items||[]).forEach(si=>{const cl=si.cost_type==='tokens'?'⚡'+si.cost:'💰'+si.cost;h+='<div class="card" style="padding:6px;margin:4px;display:flex;justify-content:space-between"><span><b>'+si.name+'</b><br><span style="font-size:9px;color:var(--dim)">'+si.desc+'</span></span><button class="btn btn-c btn-sm" onclick="rogueShopBuy(\''+si.id+'\')">'+cl+'</button></div>'});h+='<button class="btn btn-r btn-sm" onclick="rogueShopLeave()" style="margin-top:6px">离开</button>';document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
+function rogueShowRest(r){let h='<h3>🔥 休息营地</h3>';(r.rest_options||[]).forEach(o=>{if(o.available===false)return;const onclick=o.effect==='upgrade_card'?"rogueRest('upgrade','"+((rogueRun.selected_cards||[])[0]?.id||'')+"')":"rogueRest('"+o.effect+"')";h+='<button class="btn btn-c" style="margin:4px;width:100%" onclick="'+onclick+'">'+o.text+'</button>'});document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
 
-// 事件房
-async function rogueEventChoice(evtId,chId){
-  const r=await api('/api/rogue/event_choice',{event_id:evtId,choice_id:chId});
-  if(!r.ok){alert(r.error);return}
-  rogueRun=r.rogue_run;closeModal();
-  addLog('❓ '+r.event_result);
-  if(r.event_result)showModal('事件结果',r.event_result,'<button class="btn btn-c" onclick="closeModal();rogueShowMap()">继续</button>');
-  else rogueShowMap();
-}
-
-// 道具房
-async function rogueItemClaim(itemId){
-  const r=await api('/api/rogue/item_claim',{item_id:itemId});
-  if(!r.ok){alert(r.error);return}
-  rogueRun=r.rogue_run;
-  addLog('🎁 获得: '+r.item_received);rogueShowMap();
-}
-
-// 商店
-async function rogueShopBuy(itemId){
-  const r=await api('/api/rogue/shop_buy',{item_id:itemId});
-  if(!r.ok){alert(r.error);return}
-  rogueRun=r.rogue_run;
-  addLog('🏪 '+r.result);rogueShowMap();
-}
-async function rogueShopLeave(){
-  const r=await api('/api/rogue/shop_leave',{});
-  rogueRun=r.rogue_run;rogueShowMap();
-}
-
-// 休息房
-async function rogueRest(action,cardId){
-  const r=await api('/api/rogue/rest',{action:action,card_id:cardId||''});
-  if(!r.ok){alert(r.error);return}
-  rogueRun=r.rogue_run;
-  addLog('🔥 '+r.rest_result);rogueShowMap();
-}
-
-async function rogueRetire(){
-  const r=await api('/api/rogue/retire',{});
-  rogueRun=r.rogue_run;srogue();
-}
-
-function showRogueEvent(evt){
-  let h=`<h3>❓ ${evt.title}</h3><p style="color:var(--dim);font-size:11px">${evt.desc}</p>`;
-  evt.choices.forEach(c=>{h+=`<button class="btn btn-c" style="margin:4px;width:100%" onclick="rogueEventChoice('${evt.id}','${c.id}')">${c.text}</button>`});
-  document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
-}
-
-function rogueShowShop(r){
-  let h=`<h3>🏪 黑羽交易所</h3><p style="font-size:10px;color:var(--dim)">星蚀徽章: ${rogueRun.tokens||0}</p>`;
-  (r.shop_items||[]).forEach(si=>{
-    const costLabel=si.cost_type==='tokens'?`⚡${si.cost}`:`💰${si.cost}`;
-    h+=`<div class="card" style="padding:8px;margin:4px;display:flex;justify-content:space-between;align-items:center">
-      <span><b>${si.name}</b><br><span style="font-size:9px;color:var(--dim)">${si.desc}</span></span>
-      <button class="btn btn-c btn-sm" onclick="rogueShopBuy('${si.id}')">${costLabel}</button></div>`;
-  });
-  h+=`<button class="btn btn-r btn-sm" onclick="rogueShopLeave()" style="margin-top:8px">离开商店</button>`;
-  document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
-}
-
-function rogueShowRest(r){
-  let h=`<h3>🔥 休息营地</h3>`;
-  (r.rest_options||[]).forEach(o=>{
-    if(o.available===false)return;
-    const onclick=o.effect==='upgrade_card'?
-      `onclick="rogueRest('upgrade','${(rogueRun.selected_cards||[])[0]?.id||''}')"`:
-      `onclick="rogueRest('${o.effect}')"`;
-    h+=`<button class="btn btn-c" style="margin:4px;width:100%" ${onclick}>${o.text}</button>`;
-  });
-  document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
-}
 
 // ═══════════════ 聊天+公告 ═══════════════
 function escHtml(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}

@@ -1264,29 +1264,31 @@ class Character:
 # ═══════════════════ AI生成 ═══════════════════
 
 def gen_capoo_enemy(p_lv,diff="normal"):
-    """生成Capoo猫猫虫敌人 — 前期HP降低"""
+    """生成Capoo猫猫虫敌人 — 使用统一战力引擎"""
+    from enemy_engine import generate_practice_enemy
     ensure_gifs()
     profile=get_pvp_diff(diff)
+    player_power = player.power if player else 2000
+    
+    enemy_data = generate_practice_enemy(player_power, _diff_map.get(diff,"normal"))
     gif=random.choice(CAPOO_GIFS) if CAPOO_GIFS else ""
     name=random.choice(CAPOO_NAMES)
     st=capoo_stats(gif)
-    m=profile["scale"]
-    lv=max(1, min(MAX_PLAYER_LEVEL, p_lv + random.randint(-2,2)))
-    # 按等级缩放HP: 1-5级 120-300, 6-10级 300-600, 11-20级 600-1200, 20+ 递增
-    if lv<=5:    base_hp=int((120+lv*36)*m*st["def_m"])
-    elif lv<=10: base_hp=int((180+(lv-5)*60)*m*st["def_m"])
-    elif lv<=20: base_hp=int((300+(lv-10)*90)*m*st["def_m"])
-    else:        base_hp=int((700+(lv-20)*120)*m*st["def_m"])
+    
+    lv = enemy_data.get("level", max(1, p_lv+random.randint(-2,2)))
     wid=random.choice(["fire","boom","wind","lightning","sima","tv","medkit","plunger","fruit"])
     ai=Character(name=name,level=lv,gender="未知",
-        base_hp=base_hp,
-        base_atk=int((10+lv*2)*m*st["atk_m"]),
-        base_def=int((8+lv*1.5)*m*st["def_m"]),
-        base_agi=int((8+lv*1.5)*m*st["agi_m"]),
-        base_luk=int((6+lv*1)*m*st["luk_m"]),
+        base_hp=enemy_data["max_hp"],
+        base_atk=enemy_data["attack"],
+        base_def=enemy_data["defense"]//2,
+        base_agi=enemy_data["agility"],
+        base_luk=enemy_data["luck"],
         weapon_id=wid,weapon_enhance=min(12,int(lv/4)))
     ai._gif=gif; ai._type="capoo"; ai._tendency=st["倾向"]; ai._difficulty=profile
     return ai
+
+_diff_map = {"easy":"easy","normal":"normal","hard":"hard","d1":"easy","d2":"normal","d3":"normal",
+             "d4":"normal","d5":"hard","d6":"hard","d7":"hard","d8":"nightmare","d9":"nightmare","d10":"nightmare"}
 
 def gen_kiwi_enemy(p_lv,diff="normal",is_boss=False):
     """生成Kiwi几维鸟敌人 — 前期HP降低"""
@@ -2575,16 +2577,19 @@ def api_angel_can_open():
 
 @app.route('/api/dungeons')
 def api_dungeons():
+    """副本列表 — 使用统一战力引擎"""
+    from enemy_engine import recommended_power_by_tier
     ds=[]
     for d in DUNGEONS:
-        # CP要求:阶梯增长，最高~25000
-        cp_req = max(500, d["lv"]*350 + d["lv"]**2*3)
+        # 推算推荐战力: lv越高越强
+        rec_power = d.get("recommended_power") or max(2000, d["lv"]*600 + d["lv"]**2*15)
         unlocked = False
         if player:
-            try: unlocked = player.power >= cp_req
+            try: unlocked = player.power >= rec_power
             except: unlocked = False
         ds.append({"id":d["id"],"name":d["name"],"lv":d["lv"],"desc":d["desc"],
             "stages":len(d["stages"]),"unlocked":unlocked,
+            "recommended_power":rec_power,
             "rewards":{"coins":d["rw"]["coins"],"exp":d["rw"]["exp"]},
             "drops":d.get("drops",[])})  # 包含掉落表
     return jsonify({"dungeons":ds})
@@ -2712,12 +2717,10 @@ def run_server():
     else:
         app.run(host='127.0.0.1', port=port, debug=False)
 
-# ═══════════════ 星蚀试炼塔 (Roguelike) ═══════════════
-# 模块导入自 rogue_engine.py
-from rogue_engine import register_rogue_routes, ROGUE_MIN_POWER, ROGUE_MAX_POWER, rogue_recommended_power, ROGUE_CARDS, ROGUE_FLOORS
-# 使用可变容器传递player引用，确保rogue_engine能获取到_Load_session更新后的player
+# ═══════════════ 星蚀试炼塔 (v2: 难度选择→地图→战斗) ═══════════════
+from rogue_engine import register_rogue_routes, ROGUE_MIN_POWER, ROGUE_MAX_POWER, ROGUE_CARDS, ROGUE_FLOORS
 _player_ref = type('_Ref',(),{'v':player})()
-register_rogue_routes(app, save_p, _player_ref, pd, jsonify, request, random, threading)
+register_rogue_routes(app, _player_ref, save_p, pd)
 
 if __name__=='__main__':
     # ═══ 初始化数据库（PostgreSQL or local fallback） ═══
