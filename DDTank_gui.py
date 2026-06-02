@@ -208,9 +208,35 @@ def refresh_leaderboard(force=False):
     now = _dt.datetime.now()
     next_refresh = now + _dt.timedelta(minutes=30)
     
-    # 读取所有profile + bots
+    # 读取所有profile + PostgreSQL player_saves
     profiles = load_profiles()
     players = []
+    
+    # ─── PostgreSQL: 读取所有玩家存档 ───
+    if use_pg and pg_conn:
+        try:
+            with pg_conn.cursor() as cur:
+                cur.execute("SELECT u.username, ps.save_data FROM users u JOIN player_saves ps ON u.id=ps.user_id")
+                rows = cur.fetchall()
+            for username, save_data in rows:
+                if isinstance(save_data, str): save_data = json.loads(save_data)
+                elif not isinstance(save_data, dict): continue
+                c = Character.from_dict(save_data)
+                cp_val = save_data.get("combat_power", 0)
+                if cp_val == 0: cp_val = calculate_combat_power(c)["total"]
+                pid = save_data.get("profile_id", "pg_"+username)
+                players.append({
+                    "profile_id": pid, "display_name": username,
+                    "avatar": c.avatar, "level": c.level, "exp": c.exp,
+                    "combat_power": cp_val, "weapon_name": c.weapon.name if c.weapon else "无",
+                    "rating": c.rating, "wins": c.wins, "dungeon_clears": c.dungeon_clears,
+                    "is_npc": False, "is_current": False, "is_bot": False
+                })
+            print(f"[LB] Loaded {len(rows)} players from PostgreSQL")
+        except Exception as e:
+            print(f"[LB] PG load error: {e}")
+    
+    # ─── 本地 fallback ───
     for pr in profiles.get("profiles",[]):
         p = load_profile(pr["id"])
         if not p: continue
