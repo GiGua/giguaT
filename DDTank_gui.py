@@ -57,6 +57,7 @@ SAVE_FILE = os.path.join(SAVE_DIR, "save.json")
 SAVES_DIR = os.path.join(SAVE_DIR, "saves")
 PROFILES_FILE = os.path.join(SAVES_DIR, "profiles.json")
 ACTIVE_PROFILE_ID = None  # 当前活跃存档ID
+DB_USER_ID = None  # PostgreSQL users.id (用于 save_p 直接写入)
 
 def ensure_saves_dir():
     if not os.path.exists(SAVES_DIR): os.makedirs(SAVES_DIR)
@@ -1181,7 +1182,8 @@ class Character:
               angel_pot=d.get("angel_pot",0),angel_hammer=d.get("angel_hammer",0),
               silver_pot=d.get("silver_pot",0),gold_pot=d.get("gold_pot",0),
               magic_can_fragment=d.get("magic_can_fragment",0),angel_blessing_stone=d.get("angel_blessing_stone",0),
-              weapon_fragments=d.get("weapon_fragments",{}),equip_fragments=d.get("equip_fragments",{}),
+              weapon_fragments=(d.get("weapon_fragments",{}) if isinstance(d.get("weapon_fragments"),dict) else {}),
+              equip_fragments=(d.get("equip_fragments",{}) if isinstance(d.get("equip_fragments"),dict) else {}),
               angel_stats=d.get("angel_stats",{"angel_open":0,"silver_open":0,"gold_open":0,"since_epic":0,"since_legend":0,"total":0}),
               wins=d.get("wins",0),battles=d.get("battles",0),dungeon_clears=d.get("dungeon_clears",0))
         return c
@@ -1407,7 +1409,7 @@ def load_p():
     return False
 
 def save_p():
-    global player, ACTIVE_PROFILE_ID
+    global player, ACTIVE_PROFILE_ID, DB_USER_ID
     if player and ACTIVE_PROFILE_ID:
         import datetime
         # 更新战斗力
@@ -1430,19 +1432,27 @@ def save_p():
         # ─── PostgreSQL: 保存到 player_saves ───
         if use_pg and pg_conn:
             try:
-                # 需要找到 user_id：从当前玩家名反查
-                with pg_conn.cursor() as cur:
-                    cur.execute("SELECT id FROM users WHERE username = %s", (player.name,))
-                    row = cur.fetchone()
-                    if row:
+                uid = DB_USER_ID
+                if not uid:
+                    # 回退：按用户名查找
+                    with pg_conn.cursor() as cur:
+                        cur.execute("SELECT id FROM users WHERE username = %s", (player.name,))
+                        row = cur.fetchone()
+                        uid = row[0] if row else None
+                if uid:
+                    with pg_conn.cursor() as cur:
                         cur.execute("""
                             INSERT INTO player_saves (user_id, save_data, updated_at)
                             VALUES (%s, %s, CURRENT_TIMESTAMP)
                             ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
-                        """, (row[0], data))
-                pg_conn.commit()
+                        """, (uid, data))
+                    pg_conn.commit()
+                    print(f"[DB] save_p OK: {player.name} (uid={uid}) lv={player.level}")
+                else:
+                    print(f"[DB] save_p WARN: user '{player.name}' not found!")
             except Exception as e:
                 print(f"[DB] save_p error: {e}")
+                import traceback as _tb; _tb.print_exc()
 
 def pd():
     p=player;w=p.weapon
@@ -1678,7 +1688,7 @@ def pg_load_player(user_id):
 
 @app.route('/api/auth/register',methods=['POST'])
 def api_auth_register():
-    global player, ACTIVE_PROFILE_ID
+    global player, ACTIVE_PROFILE_ID, DB_USER_ID
     d=request.get_json(force=True,silent=True) or {}
     username=(d.get("username") or "").strip()
     password=(d.get("password") or "").strip()
@@ -1715,7 +1725,7 @@ def api_auth_register():
             profiles["profiles"].append({"id":pid,"display_name":username,"created_at":now,"updated_at":now,"level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
             profiles["active_profile_id"] = pid
             save_profiles(profiles)
-            ACTIVE_PROFILE_ID = pid; player = c
+            ACTIVE_PROFILE_ID = pid; player = c; DB_USER_ID = uid
             return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
         except Exception as e:
             pg_conn.rollback()
@@ -1742,7 +1752,7 @@ def api_auth_register():
 
 @app.route('/api/auth/login',methods=['POST'])
 def api_auth_login():
-    global player, ACTIVE_PROFILE_ID
+    global player, ACTIVE_PROFILE_ID, DB_USER_ID
     d=request.get_json(force=True,silent=True) or {}
     username=(d.get("username") or "").strip()
     password=(d.get("password") or "").strip()
@@ -1782,7 +1792,7 @@ def api_auth_login():
             profiles["profiles"].append({"id":pid,"display_name":c.name,"created_at":_dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),"updated_at":"","level":c.level,"avatar_preview":c.avatar[:50] if c.avatar else ""})
             profiles["active_profile_id"] = pid
             save_profiles(profiles)
-            ACTIVE_PROFILE_ID = pid; player = c; player.init_battle()
+            ACTIVE_PROFILE_ID = pid; player = c; player.init_battle(); DB_USER_ID = uid
             return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
         except Exception as e:
             return jsonify({"ok":False,"error":f"登录异常: {str(e)[:100]}"})
@@ -1803,8 +1813,8 @@ def api_auth_login():
 
 @app.route('/api/auth/logout',methods=['POST'])
 def api_auth_logout():
-    global player, ACTIVE_PROFILE_ID
-    player=None;ACTIVE_PROFILE_ID=None
+    global player, ACTIVE_PROFILE_ID, DB_USER_ID
+    player=None;ACTIVE_PROFILE_ID=None;DB_USER_ID=None
     return jsonify({"ok":True})
 
 @app.route('/api/auth/status')
