@@ -830,7 +830,7 @@ KIWI_DIFFICULTY={
 
 DUNGEONS = [
     {"id":"goblin_cave","name":"几维鸟草窝","lv":1,"desc":"新手几维鸟在草窝里守着第一批补给",
-     "stages":[{"name":"草窝入口","n":1,"d":"easy"},{"name":"羽毛小道","n":2,"d":"easy"},{"name":"雏鸟王座","n":1,"d":"normal","boss":True}],
+     "stages"
      "rw":{"coins":(120,250),"exp":(100,200),"stone":"small","stone_n":(1,3)},
      "drops":[
          {"type":"weapon","ids":["fire","boom","wind","lightning","sima","medkit","plunger","fruit"],"rate":0.15,"label":"普通武器"},
@@ -960,16 +960,16 @@ def fragment_need_for_quality(q):
     return 70
 
 PVP_DIFFICULTIES = [
-    {"id":"d1","name":"青铜练习场","lv":1,"scale":0.72,"coins":(60,120),"exp":(35,70),"frag":(0,1)},
-    {"id":"d2","name":"白银练习场","lv":3,"scale":0.86,"coins":(90,170),"exp":(55,95),"frag":(0,2)},
-    {"id":"d3","name":"黄金练习场","lv":5,"scale":1.00,"coins":(130,230),"exp":(80,130),"frag":(1,3)},
-    {"id":"d4","name":"铂金练习场","lv":8,"scale":1.18,"coins":(180,300),"exp":(110,170),"frag":(2,5)},
-    {"id":"d5","name":"钻石练习场","lv":12,"scale":1.38,"coins":(240,390),"exp":(150,230),"frag":(4,8)},
-    {"id":"d6","name":"大师试炼场","lv":18,"scale":1.62,"coins":(330,520),"exp":(210,320),"frag":(6,12)},
-    {"id":"d7","name":"宗师试炼场","lv":25,"scale":1.92,"coins":(450,700),"exp":(290,430),"frag":(9,18)},
-    {"id":"d8","name":"王者试炼场","lv":35,"scale":2.28,"coins":(620,960),"exp":(420,620),"frag":(14,26)},
-    {"id":"d9","name":"传说试炼场","lv":50,"scale":2.72,"coins":(850,1300),"exp":(650,950),"frag":(22,38)},
-    {"id":"d10","name":"神话试炼场","lv":70,"scale":3.25,"coins":(1200,1900),"exp":(900,1400),"frag":(35,60)},
+    {"id":"d1","name":"青铜练习场","cp_req":500,"scale":0.72,"coins":(60,120),"exp":(35,70),"frag":(0,1)},
+    {"id":"d2","name":"白银练习场","cp_req":1200,"scale":0.86,"coins":(90,170),"exp":(55,95),"frag":(0,2)},
+    {"id":"d3","name":"黄金练习场","cp_req":2500,"scale":1.00,"coins":(130,230),"exp":(80,130),"frag":(1,3)},
+    {"id":"d4","name":"铂金练习场","cp_req":4500,"scale":1.18,"coins":(180,300),"exp":(110,170),"frag":(2,5)},
+    {"id":"d5","name":"钻石练习场","cp_req":7000,"scale":1.38,"coins":(240,390),"exp":(150,230),"frag":(4,8)},
+    {"id":"d6","name":"大师试炼场","cp_req":10000,"scale":1.62,"coins":(330,520),"exp":(210,320),"frag":(6,12)},
+    {"id":"d7","name":"宗师试炼场","cp_req":14000,"scale":1.92,"coins":(450,700),"exp":(290,430),"frag":(9,18)},
+    {"id":"d8","name":"王者试炼场","cp_req":18000,"scale":2.28,"coins":(620,960),"exp":(420,620),"frag":(14,26)},
+    {"id":"d9","name":"传说试炼场","cp_req":21000,"scale":2.72,"coins":(850,1300),"exp":(650,950),"frag":(18,34)},
+    {"id":"d10","name":"神话试炼场","cp_req":24000,"scale":3.25,"coins":(1200,1900),"exp":(900,1400),"frag":(24,45)},
 ]
 PVP_DIFF_MAP = {d["id"]:d for d in PVP_DIFFICULTIES}
 PVP_LEGACY_MAP = {"easy":"d1","normal":"d3","hard":"d5"}
@@ -2090,9 +2090,9 @@ def api_load():
 
 @app.route('/api/pvp_difficulties')
 def api_pvp_difficulties():
-    lv=player.level if player else 1
-    return jsonify({"ok":True,"player_level":lv,
-        "difficulties":[{**d,"unlocked":lv>=d["lv"],"recommended":lv>=d["lv"] and (d is PVP_DIFFICULTIES[-1] or lv<PVP_DIFFICULTIES[PVP_DIFFICULTIES.index(d)+1]["lv"])} for d in PVP_DIFFICULTIES]})
+    cp = player.power if player else 500
+    return jsonify({"ok":True,"player_cp":cp,
+        "difficulties":[{**d,"unlocked":cp>=d.get("cp_req",0),"recommended":False} for d in PVP_DIFFICULTIES]})
 
 @app.route('/api/start_battle',methods=['POST'])
 def api_start_battle():
@@ -2100,8 +2100,9 @@ def api_start_battle():
     ensure_gifs()
     d=request.get_json(force=True,silent=True) or {};diff=d.get("difficulty","normal")
     profile=get_pvp_diff(diff)
-    if player.level<profile["lv"]:
-        return jsonify({"ok":False,"msg":f"需要达到 Lv.{profile['lv']} 才能进入 {profile['name']}"})
+    cp_req = profile.get("cp_req", 0)
+    if player.power < cp_req:
+        return jsonify({"ok":False,"msg":f"需要达到 {cp_req} 战斗力才能进入 {profile['name']}"})
     player.init_battle();enemy=gen_capoo_enemy(player.level,diff);enemy.init_battle()
     battle=BattleEngine(player,enemy);battle_over=None
     battle.reward_profile=profile
@@ -2561,7 +2562,9 @@ def api_angel_can_open():
 def api_dungeons():
     ds=[]
     for d in DUNGEONS:
-        unlocked=player.power>=d.get("cp_req",d["lv"]*100) if player else False
+        # CP要求:阶梯增长，最高~25000
+        cp_req = max(500, d["lv"]*350 + d["lv"]**2*3)
+        unlocked=player.power>=cp_req if player else False
         ds.append({"id":d["id"],"name":d["name"],"lv":d["lv"],"desc":d["desc"],
             "stages":len(d["stages"]),"unlocked":unlocked,
             "rewards":{"coins":d["rw"]["coins"],"exp":d["rw"]["exp"]},
@@ -2574,7 +2577,7 @@ def api_start_dungeon():
     d=request.get_json(force=True,silent=True) or {};did=d.get("dungeon_id")
     dg=next((d for d in DUNGEONS if d["id"]==did),None)
     if not dg:return jsonify({"ok":False,"msg":"副本不存在"})
-    cp_req = dg.get("cp_req", dg["lv"]*100)
+    cp_req = max(500, dg["lv"]*350 + dg["lv"]**2*3)
     if player.power < cp_req:return jsonify({"ok":False,"msg":f"战力不足，需要{cp_req}战斗力"})
     player.init_battle()
     st=dg["stages"][0]

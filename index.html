@@ -528,16 +528,16 @@ async function delS(){
 // ═══════════════ 人机对战 ═══════════════
 async function spvp(){enterPage('pvp');
   const r=await api('/api/pvp_difficulties');
-  const ds=r.difficulties||[];const lv=r.player_level||player?.level||1;
+  const ds=r.difficulties||[];const cp=r.player_cp||player?.power||500;
   let h=`<div class="fade-in"><h2>🐱 人机练习 — 10档Capoo试炼</h2>
-  <p style="color:var(--dim);margin-bottom:10px">当前 Lv.${lv}，推荐挑战带有“推荐”的档位。等级不足的档位无法进入。</p><div class="wgrid">`;
+  <p style="color:var(--dim);margin-bottom:10px">当前战力 ${cp}，战力不足的档位无法进入。</p><div class="wgrid">`;
   ds.forEach((d,i)=>{
     const locked=!d.unlocked;const rec=d.recommended;
     h+=`<div class="wcard" style="${locked?'opacity:.45;cursor:not-allowed':'cursor:pointer'};border-color:${rec?'var(--yellow)':'var(--border)'}" ${locked?'':`onclick="spvpb('${d.id}')"`}>
       <div class="wn" style="color:${rec?'var(--yellow)':'var(--cyan)'}">${i+1}. ${d.name} ${rec?'<span style="font-size:10px;color:var(--green)">推荐</span>':''}</div>
-      <div class="ws">入场等级 Lv.${d.lv}+ | 敌人强度 x${d.scale}</div>
+      <div class="ws">需要战力 ${d.cp_req||0}+ | 敌人强度 x${d.scale}</div>
       <div class="ws">奖励: 💰${d.coins[0]}-${d.coins[1]} | ⭐${d.exp[0]}-${d.exp[1]} | 🧩${d.frag[0]}-${d.frag[1]}</div>
-      <div class="wp" style="color:${locked?'var(--red)':'var(--green)'}">${locked?'🔒 等级不足':'⚔️ 可挑战'}</div>
+      <div class="wp" style="color:${locked?'var(--red)':'var(--green)'}">${locked?'🔒 战力不足':'⚔️ 可挑战'}</div>
     </div>`;
   });
   document.getElementById('content').innerHTML=h+'</div></div>'}
