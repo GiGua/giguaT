@@ -461,9 +461,7 @@ def simulate_bot_actions(steps=1):
                 if mats.get("angel_pot",0)>0 and mats.get("angel_hammer",0)>=4:
                     mats["angel_pot"]-=1;mats["angel_hammer"]-=4
                     bot["angel_open_count"]=bot.get("angel_open_count",0)+1
-                    # 开出好东西时公告
-                    if random.random()<0.03:
-                        announcements.append({"time":now.isoformat(),"msg":f"🎉 恭喜【{bot['display_name']}】开启天使魔罐，获得神器！","type":"mythic"})
+                    # bot开罐不再公告，只记录
                     if random.random()<0.1: chat_log.append({"time":now.isoformat(),"name":bot["display_name"],"channel":"pot","msg":random.choice(CHAT_POOLS["pot"]),"is_bot":True})
             elif action == "enhance":
                 elv = bot.get("weapon_enhances",{}).get(bot.get("weapon_id","fire"),0)
@@ -2544,6 +2542,12 @@ def api_angel_can_open():
         if ao%100==0 and ao>0:bonus_gold=1;player.gold_pot+=1
         
         save_p()
+        # 真人玩家获得传说/神话奖励时，同步到公屏聊天
+        if best_rarity in ("legend","mythic"):
+            chat_log = load_chat_log()
+            chat_log.append({"time": _dt.datetime.now().isoformat(), "name": player.name,
+                "channel": "world", "msg": f"🎉 恭喜【{player.name}】开启天使魔罐，获得{best_rarity}奖励！", "is_bot": False})
+            save_chat_log(chat_log[-100:])
         return jsonify({"ok":True,"opened":count,"consumed":{"hammer":cost_hammer,"pot":count},
             "rewards":all_rewards,"best_rarity":best_rarity,"bonus":{"silver":bonus_silver,"gold":bonus_gold},
             "stats":player.angel_stats,"player":pd()})
@@ -2555,7 +2559,7 @@ def api_angel_can_open():
 def api_dungeons():
     ds=[]
     for d in DUNGEONS:
-        unlocked=player.level>=d["lv"] if player else False
+        unlocked=player.power>=d.get("cp_req",d["lv"]*100) if player else False
         ds.append({"id":d["id"],"name":d["name"],"lv":d["lv"],"desc":d["desc"],
             "stages":len(d["stages"]),"unlocked":unlocked,
             "rewards":{"coins":d["rw"]["coins"],"exp":d["rw"]["exp"]},
@@ -2568,7 +2572,8 @@ def api_start_dungeon():
     d=request.get_json(force=True,silent=True) or {};did=d.get("dungeon_id")
     dg=next((d for d in DUNGEONS if d["id"]==did),None)
     if not dg:return jsonify({"ok":False,"msg":"副本不存在"})
-    if player.level<dg["lv"]:return jsonify({"ok":False,"msg":"等级不足"})
+    cp_req = dg.get("cp_req", dg["lv"]*100)
+    if player.power < cp_req:return jsonify({"ok":False,"msg":f"战力不足，需要{cp_req}战斗力"})
     player.init_battle()
     st=dg["stages"][0]
     enemy=gen_kiwi_enemy(player.level,st["d"],st.get("boss",False));enemy.init_battle()
@@ -2703,20 +2708,21 @@ if __name__=='__main__':
         generate_bots(500 - len(cleaned))
     # 自动刷新排行榜
     refresh_leaderboard()
-    # ═══ 后台公屏聊天线程：每2-30秒生成1-10条消息 ═══
+    # ═══ 后台公屏聊天：每分钟1-2条bot消息 ═══
     def chat_simulator_loop():
         import time as _time
         while True:
             try:
-                steps = random.randint(1, 10)
-                for _ in range(steps):
+                # 每分钟生成1-2条bot聊天
+                n = random.randint(1, 2)
+                for _ in range(n):
                     simulate_bot_actions(steps=1)
-                _time.sleep(random.randint(2, 30))
+                _time.sleep(60)  # 每分钟一次
             except Exception:
-                _time.sleep(5)
+                _time.sleep(30)
     chat_thread = threading.Thread(target=chat_simulator_loop, daemon=True)
     chat_thread.start()
-    print("公屏聊天模拟器已启动 (每2-30秒生成1-10条消息)")
+    print("公屏聊天模拟器已启动 (每分钟1-2条消息)")
     import os as _os
     is_cloud = 'RENDER' in _os.environ
     port = int(_os.environ.get('PORT', 19999)) if is_cloud else pick_local_port(19999)
