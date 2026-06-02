@@ -2694,6 +2694,176 @@ def run_server():
     else:
         app.run(host='127.0.0.1', port=port, debug=False)
 
+# ═══════════════ 星蚀试炼塔 (Roguelike) ═══════════════
+ROGUE_MIN_POWER = 2000
+ROGUE_MAX_POWER = 120000
+
+def rogue_recommended_power(floor):
+    """指数曲线推荐战斗力"""
+    return int(ROGUE_MIN_POWER * (ROGUE_MAX_POWER / ROGUE_MIN_POWER) ** ((floor - 1) / 19))
+
+ROGUE_CARDS = [
+    # 攻击卡
+    {"id":"atk_up","name":"火力增幅","type":"attack","quality":"common","desc":"攻击+8%","effect":"atk_pct", "value":8},
+    {"id":"dmg_up","name":"强袭弹","type":"attack","quality":"common","desc":"普攻伤害+12%","effect":"dmg_pct", "value":12},
+    {"id":"armor_break","name":"破甲弹","type":"attack","quality":"rare","desc":"无视18%护甲","effect":"ignore_armor", "value":18},
+    {"id":"double_shot","name":"双重射击","type":"attack","quality":"epic","desc":"每3回合额外攻击70%","effect":"extra_attack_3", "value":70},
+    {"id":"star_cannon","name":"星陨重炮","type":"attack","quality":"epic","desc":"每4回合伤害+100%","effect":"boost_4", "value":100},
+    {"id":"judge","name":"奇维鸟审判","type":"attack","quality":"legend","desc":"Boss伤害+35%,暴伤+35%","effect":"boss_crit", "value":35},
+    {"id":"eclipse_final","name":"星蚀终炮","type":"attack","quality":"mythic","desc":"首击250%,2回合敌受伤+20%","effect":"first_strike", "value":250},
+    # 属性卡
+    {"id":"hp_up","name":"生命强化","type":"stat","quality":"common","desc":"最大生命+12%","effect":"hp_pct", "value":12},
+    {"id":"luck_up","name":"幸运羽毛","type":"stat","quality":"common","desc":"幸运+12%","effect":"luk_pct", "value":12},
+    {"id":"focus","name":"战斗专注","type":"stat","quality":"rare","desc":"暴击率+8%","effect":"crit_up", "value":8},
+    {"id":"extreme_fire","name":"极限火力","type":"stat","quality":"epic","desc":"攻击+25%,受伤+8%","effect":"atk25_dmg8", "value":25},
+    {"id":"steel_wing","name":"钢铁羽翼","type":"stat","quality":"epic","desc":"HP+22%,护甲+15%","effect":"hp_armor", "value":22},
+    {"id":"star_core","name":"星核共鸣","type":"stat","quality":"legend","desc":"全属性+15%","effect":"all_up", "value":15},
+    # 防御卡
+    {"id":"shield","name":"厚羽护盾","type":"defense","quality":"common","desc":"开场HP8%护盾","effect":"start_shield", "value":8},
+    {"id":"heal_end","name":"应急包扎","type":"defense","quality":"common","desc":"战后恢复8%HP","effect":"end_heal", "value":8},
+    {"id":"unyielding","name":"不屈羽翼","type":"defense","quality":"epic","desc":"HP<30%恢复22%","effect":"low_hp_heal", "value":22},
+    # 怒气卡
+    {"id":"rage_flow","name":"怒气回流","type":"rage","quality":"common","desc":"每回合+8怒气","effect":"rage_per_turn", "value":8},
+    {"id":"war_spirit","name":"战意高涨","type":"rage","quality":"rare","desc":"开局+35怒气","effect":"start_rage", "value":35},
+    # 回复卡
+    {"id":"regen","name":"轻微恢复","type":"heal","quality":"common","desc":"每回合回1.5%HP","effect":"regen", "value":1.5},
+    {"id":"life_drain","name":"生命汲取","type":"heal","quality":"rare","desc":"伤害8%转回血","effect":"lifesteal", "value":8},
+]
+
+ROGUE_ENEMY_SKILLS = {
+    "normal": [
+        {"name":"连续啄击","desc":"连续攻击2次","hits":2,"dmg_pct":55,"min_floor":3},
+        {"name":"羽刃投射","desc":"120%伤害,玩家下回合受伤+10%","dmg_pct":120,"debuff":"dmg_taken_up","min_floor":4},
+        {"name":"暗羽护体","desc":"获得12%HP护盾","shield_pct":12,"min_floor":5},
+        {"name":"生命啄食","desc":"90%伤害,30%吸血","dmg_pct":90,"lifesteal":30,"min_floor":6},
+    ],
+    "elite": [
+        {"name":"三连碎羽","desc":"连续攻击3次","hits":3,"dmg_pct":45,"min_floor":10},
+        {"name":"星蚀回血","desc":"恢复15%HP","heal_pct":15,"min_floor":10},
+        {"name":"破甲尖啸","desc":"100%伤害,降护甲12%","dmg_pct":100,"armor_down":12,"min_floor":12},
+    ],
+}
+
+def rogue_enemy_power(floor):
+    """根据楼层生成敌人战斗力"""
+    base = rogue_recommended_power(floor)
+    return int(base * random.uniform(0.85, 1.15))
+
+def roll_rogue_cards(floor, count=3):
+    """随机选卡，15层后可能出现神话"""
+    pool = [c for c in ROGUE_CARDS if c["quality"] != "mythic"]
+    if floor >= 15 and random.random() < 0.08:
+        mythics = [c for c in ROGUE_CARDS if c["quality"] == "mythic"]
+        pool += mythics
+    legends = [c for c in ROGUE_CARDS if c["quality"] == "legend"]
+    if floor >= 10 and random.random() < 0.15:
+        pool += legends
+    return random.sample(pool, min(count, len(pool)))
+
+@app.route('/api/rogue/info')
+def api_rogue_info():
+    global player
+    if not player: return jsonify({"ok":False,"error":"未登录"})
+    rr = player.stats.get("rogue_run") if hasattr(player,'stats') else None
+    cp = player.power
+    can_enter = cp >= ROGUE_MIN_POWER
+    return jsonify({"ok":True,"can_enter":can_enter,"min_power":ROGUE_MIN_POWER,
+        "player_power":cp,"rogue_run":rr,"floor_count":20})
+
+@app.route('/api/rogue/start', methods=['POST'])
+def api_rogue_start():
+    global player
+    if not player: return jsonify({"ok":False,"error":"未登录"})
+    if player.power < ROGUE_MIN_POWER:
+        return jsonify({"ok":False,"error":f"战斗力不足，最低需要{ROGUE_MIN_POWER}"})
+    rr = {"active":True,"floor":1,"max_floor":20,"recommended_power":rogue_recommended_power(1),
+          "cards":[],"buffs":{},"current_hp":player.maxhp,"shield":0,"rewards":{"gold":0,"exp":0},
+          "floor20_warned":False,"attempts":player.stats.get("rogue_attempts",0)+1}
+    player.stats["rogue_run"] = rr
+    player.stats["rogue_attempts"] = player.stats.get("rogue_attempts",0)+1
+    save_p()
+    return jsonify({"ok":True,"rogue_run":rr,"player":pd()})
+
+@app.route('/api/rogue/battle', methods=['POST'])
+def api_rogue_battle():
+    global player
+    if not player: return jsonify({"ok":False,"error":"未登录"})
+    rr = player.stats.get("rogue_run")
+    if not rr or not rr.get("active"): return jsonify({"ok":False,"error":"无活跃试炼"})
+    floor = rr["floor"]
+    is_boss = floor in (5,10,15,20)
+    is_elite = floor in (10,)
+    ep = rogue_enemy_power(floor)
+    # 简化战斗: 根据战力比计算胜率和伤害
+    ratio = player.power / max(1, ep)
+    win_chance = min(0.95, max(0.1, 0.5 + (ratio - 1) * 0.3))
+    won = random.random() < win_chance
+    dmg_taken = int(player.maxhp * random.uniform(0.15, 0.5) * (2 - min(1.5, ratio)))
+    dmg_dealt = int(ep * 0.3 * random.uniform(0.8, 1.2) * ratio)
+    # 卡牌效果
+    for c in rr.get("cards",[]):
+        if c["id"] == "start_shield": rr["shield"] = int(player.maxhp * c["value"] / 100)
+        if c["id"] == "dmg_pct" and won: dmg_dealt = int(dmg_dealt * (1 + c["value"]/100))
+        if c["id"] == "hp_pct": player.maxhp = int(player.maxhp * (1 + c["value"]/100))
+    rr["current_hp"] = max(0, player.maxhp - dmg_taken)
+    # 敌人技能
+    skill_used = None
+    skill_chance = 0.1 if floor <= 4 else (0.2 if floor <= 9 else (0.35 if floor <= 14 else 0.5))
+    if is_boss: skill_chance = 0.8
+    if random.random() < skill_chance:
+        pool = ROGUE_ENEMY_SKILLS.get("elite" if is_elite else "normal", [])
+        pool = [s for s in pool if s["min_floor"] <= floor]
+        if pool: skill_used = random.choice(pool)
+    
+    # 奖励
+    gold = 200 + floor * 250 + floor**2 * 80
+    exp = 100 + floor * 150
+    rr["rewards"]["gold"] = rr["rewards"].get("gold",0) + gold
+    rr["rewards"]["exp"] = rr["rewards"].get("exp",0) + exp
+    
+    if won:
+        player.coins += gold; player.gain_exp(exp)
+        rr["floor"] += 1
+        if rr["floor"] > 20:
+            rr["active"] = False; rr["cleared"] = True
+            player.stats["rogue_clears"] = player.stats.get("rogue_clears",0)+1
+        player.stats["rogue_best_floor"] = max(player.stats.get("rogue_best_floor",0), rr["floor"]-1)
+        cards = roll_rogue_cards(min(rr["floor"]-1, 20)) if rr["floor"] <= 20 else []
+        rr["recommended_power"] = rogue_recommended_power(min(rr["floor"], 20))
+    else:
+        rr["active"] = False
+        player.stats["rogue_best_floor"] = max(player.stats.get("rogue_best_floor",0), floor)
+        cards = []
+    
+    player.stats["rogue_run"] = rr
+    save_p()
+    return jsonify({"ok":True,"won":won,"floor":floor,"cards":cards if won else [],
+        "rogue_run":rr,"skill_used":skill_used,"dmg_taken":dmg_taken,"dmg_dealt":dmg_dealt,
+        "gold":gold,"exp":exp,"player":pd()})
+
+@app.route('/api/rogue/pick_card', methods=['POST'])
+def api_rogue_pick_card():
+    global player
+    d = request.get_json(force=True,silent=True) or {}
+    card_id = d.get("card_id","")
+    rr = player.stats.get("rogue_run")
+    if not rr: return jsonify({"ok":False,"error":"无活跃试炼"})
+    card = next((c for c in ROGUE_CARDS if c["id"] == card_id), None)
+    if card:
+        rr["cards"] = rr.get("cards",[]) + [card]
+        player.stats["rogue_cards_picked"] = player.stats.get("rogue_cards_picked",0)+1
+    player.stats["rogue_run"] = rr
+    save_p()
+    return jsonify({"ok":True,"rogue_run":rr,"player":pd()})
+
+@app.route('/api/rogue/retire', methods=['POST'])
+def api_rogue_retire():
+    global player
+    rr = player.stats.get("rogue_run")
+    if rr: rr["active"] = False; player.stats["rogue_run"] = rr
+    save_p()
+    return jsonify({"ok":True,"rogue_run":rr,"player":pd()})
+
 if __name__=='__main__':
     # ═══ 初始化数据库（PostgreSQL or local fallback） ═══
     print("=" * 50)

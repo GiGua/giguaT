@@ -488,6 +488,7 @@ async function smm(){
       <div class="mi" onclick="sangel()"><div class="ic">🏺</div><div class="tt">天使魔罐</div><div class="ds">砸罐开奖·限定武器·稀有材料</div></div>
       <div class="mi" onclick="slb()"><div class="ic">🏆</div><div class="tt">排行榜</div><div class="ds">战斗力排名·等级排名·30分更新</div></div>
       <div class="mi" onclick="si()"><div class="ic">📋</div><div class="tt">角色详情</div><div class="ds">查看完整装备属性</div></div>
+      <div class="mi" onclick="srogue()"><div class="ic">🗼</div><div class="tt">星蚀试炼塔</div><div class="ds">20层肉鸽爬塔·选卡构筑·极限挑战</div></div>
     </div></div>`;
   }else{
     c.innerHTML=`<div class="fade-in" style="text-align:center;padding:50px 20px">
@@ -1191,6 +1192,76 @@ async function startBotBattle(botId){
   player.hp=battle.player_hp;player.rage=battle.player_rage||0;
   enterPage('bot_battle_fight');rsb();rbs();
   addLog('⚔️ 真人对战开始：'+enemyData.name+' Lv.'+enemyData.level+' 战斗力'+(enemyData.combat_power||'')+' Rating '+(enemyData.rating||1000));
+}
+
+// ═══════════════ 星蚀试炼塔 ═══════════════
+async function srogue(){
+  const r=await api('/api/rogue/info');
+  if(!r.ok){alert(r.error);return}
+  const rr=r.rogue_run;
+  let h='<div class="fade-in"><h2>🗼 星蚀试炼塔</h2>';
+  h+=`<p style="color:var(--dim)">当前战力: <b>${r.player_power||0}</b> | 入场要求: <b>${r.min_power}</b></p>`;
+  if(rr&&rr.active){
+    h+=`<div class="card" style="background:var(--bg3);border-color:var(--purple)">
+      <b>进行中的试炼</b><br>楼层: ${rr.floor}/20 | 推荐战力: ${rr.recommended_power||'?'}<br>
+      已选卡: ${(rr.cards||[]).length}张 | 累计金币: ${rr.rewards?.gold||0}<br>
+      <button class="btn btn-c" onclick="rogueContinue()">继续挑战</button>
+      <button class="btn btn-r btn-sm" onclick="rogueRetire()">退出结算</button></div>`;
+  }
+  if(!r.can_enter){
+    h+=`<p style="color:var(--red)">战斗力不足，需要${r.min_power}战力</p>`;
+  }else if(!rr||!rr.active){
+    h+=`<button class="btn btn-c btn-lg" onclick="rogueStart()">开始试炼</button>`;
+    h+=`<p style="font-size:10px;color:var(--dim);margin-top:8px">20层肉鸽爬塔·每层选卡·战力指数增长</p>`;
+  }
+  // 显示推荐战力表
+  h+='<div class="card" style="margin-top:8px"><b>推荐战力参考</b><br><span style="font-size:10px;color:var(--dim)">';
+  for(let i=1;i<=20;i+=2)h+=`${i}F:${fmtNum(Math.round(2000*Math.pow(60,(i-1)/19)))} `;
+  h+='</span></div></div>';
+  document.getElementById('content').innerHTML=h;
+}
+async function rogueStart(){
+  const r=await api('/api/rogue/start');
+  if(!r.ok){alert(r.error);return}
+  rogueBattle();
+}
+async function rogueContinue(){rogueBattle();}
+async function rogueBattle(){
+  const r=await api('/api/rogue/battle');
+  if(!r.ok){alert(r.error);srogue();return}
+  addLog(r.won?`🗼 第${r.floor}层 胜利！💰+${r.gold}`:`💀 第${r.floor}层 失败`);
+  if(r.skill_used)addLog(`🐦 敌人使用: ${r.skill_used.name}`);
+  if(!r.won){showModal('💀 试炼结束',`止步第${r.floor}层<br>累计金币:${r.rogue_run.rewards.gold}<br>累计经验:${r.rogue_run.rewards.exp}`,'<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
+  if(r.floor>=20&&!r.rogue_run.floor20_warned){
+    // 20层警告
+    showModal('⚠ 星蚀终层：不可逆之门',
+      `<div style="color:var(--red);font-size:13px">推荐战力:120000 | 你的战力:${player.power}<br>
+      已选卡:${r.rogue_run.cards.length}张<br>累计金币:${r.rogue_run.rewards.gold}<br>
+      <b style="color:var(--purple)">终极Boss会连续攻击、回血、狂暴！</b></div>`,
+      '<button class="btn btn-c" onclick="closeModal();rogueFloor20Fight()">继续挑战</button> <button class="btn btn-r btn-sm" onclick="closeModal();rogueRetire()">撤退</button>');
+    r.rogue_run.floor20_warned=true;
+    return;
+  }
+  if(r.cards&&r.cards.length>0)showRogueCards(r.cards);
+  else if(r.rogue_run.cleared)showModal('🏆 通关！','20层全部通关！<br>累计奖励已发放','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');
+  else rogueBattle();
+}
+function showRogueCards(cards){
+  let h='<h3>选择1张卡牌</h3><div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">';
+  const qc={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'};
+  cards.forEach(c=>{h+=`<div class="card" style="cursor:pointer;border-color:${qc[c.quality]};width:140px" onclick="roguePickCard('${c.id}')"><b style="color:${qc[c.quality]}">${c.name}</b><br><span style="font-size:10px;color:var(--dim)">${c.desc}</span></div>`});
+  h+='</div>';
+  document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');
+}
+async function roguePickCard(cid){
+  await api('/api/rogue/pick_card',{card_id:cid});closeModal();
+  addLog('🃏 已选择卡牌');rogueBattle();
+}
+async function rogueRetire(){
+  await api('/api/rogue/retire');srogue();
+}
+async function rogueFloor20Fight(){
+  rogueBattle();
 }
 
 // ═══════════════ 聊天+公告 ═══════════════
