@@ -1013,6 +1013,7 @@ class Character:
     magic_can_fragment:int=0;angel_blessing_stone:int=0
     weapon_fragments:Dict[str,int]=field(default_factory=dict);equip_fragments:Dict[str,int]=field(default_factory=dict)
     angel_stats:Dict[str,int]=field(default_factory=lambda:{"angel_open":0,"silver_open":0,"gold_open":0,"since_epic":0,"since_legend":0,"total":0})
+    stats:dict=field(default_factory=dict)
     current_hp:int=0;wins:int=0;battles:int=0;dungeon_clears:int=0
 
     def add_weapon(self,wid):
@@ -2267,6 +2268,10 @@ def api_switch_weapon():
     global player
     d=request.get_json(force=True,silent=True) or {};wid=d.get("weapon_id")
     if wid in WEAPONS and wid in player.owned_weapons:
+        old_enhance = player.weapon_enhances.get(player.weapon_id, 0)
+        new_enhance = player.weapon_enhances.get(wid, 0)
+        if old_enhance > new_enhance:
+            player.weapon_enhances[wid] = old_enhance
         player.weapon_id=wid;save_p()
         return jsonify({"ok":True,"msg":f"切换为{WEAPONS[wid].name}","player":pd()})
     return jsonify({"ok":False,"msg":"未拥有此武器"})
