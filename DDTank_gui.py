@@ -236,10 +236,12 @@ def refresh_leaderboard(force=False):
         except Exception as e:
             print(f"[LB] PG load error: {e}")
     
-    # ─── 本地 fallback ───
+    # ─── 本地 fallback (去重：跳过PG已有用户) ───
+    pg_names = {p["display_name"] for p in players}
     for pr in profiles.get("profiles",[]):
         p = load_profile(pr["id"])
         if not p: continue
+        if p.name in pg_names: continue  # PG已有，跳过
         data = p.to_dict()
         cp_val = data.get("combat_power",0)
         if cp_val == 0:
@@ -655,9 +657,9 @@ def get_pve_rate_config(player_level):
 
 # ═══ 魔罐奖励池 ═══
 ANGEL_CAN_POOLS = {
-    "angel": {"common":0.45,"rare":0.28,"epic":0.15,"legend":0.07,"mythic":0.05},
-    "silver": {"common":0.30,"rare":0.25,"epic":0.18,"legend":0.12,"mythic":0.10},
-    "gold":   {"common":0.15,"rare":0.20,"epic":0.22,"legend":0.20,"mythic":0.18},
+    "angel": {"common":0.50,"rare":0.30,"epic":0.13,"legend":0.05,"mythic":0.02},
+    "silver": {"common":0.35,"rare":0.30,"epic":0.20,"legend":0.10,"mythic":0.05},
+    "gold":   {"common":0.20,"rare":0.25,"epic":0.25,"legend":0.18,"mythic":0.12},
 }
 # 魔罐限定武器ID(副本不掉落)
 POT_EXCLUSIVE_WEAPONS = ["true_minotaur","true_spear","true_boomerang","angel_gift"]

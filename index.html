@@ -110,6 +110,8 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 
 
 .avatar-frame{width:44px;height:44px;border-radius:12px;padding:2px;background:linear-gradient(135deg,#00e5ff,#8a5cff,#ffcc00);box-shadow:0 0 10px rgba(0,229,255,.35);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}.avatar-frame img{display:block;background:#111827}.top-avatar-frame{width:86px;height:86px;border-radius:20px}.top-avatar-frame img{border-radius:18px}
+.danger-mid{filter:sepia(0.6) hue-rotate(-20deg) saturate(1.5)}
+.danger-high{filter:sepia(0.9) hue-rotate(-30deg) saturate(2);animation:shake .3s ease infinite}
 
 @media(max-width:800px){
   main{flex-direction:column}
@@ -567,7 +569,17 @@ function rbs(){
   <div style="text-align:center;font-size:13px;margin:4px 0">距离:<b style="color:var(--cyan)">${battle.distance}m</b> | 风力:<b style="color:${battle.wind>0?'var(--cyan)':'var(--purple)'}">${battle.wind>0?'→':battle.wind<0?'←':''} ${Math.abs(battle.wind)}</b> | 回合:<b>${battle.turn||1}</b></div>
   <div style="text-align:center;color:var(--dim);font-size:11px">${isBot?'⚔️ 真人竞技镜像会根据Rating成长':'⚡ AI自动计算最优弹道'}</div>
   <div class="action-row"><button class="btn btn-c btn-lg" onclick="pa()" id="btn-fire">🚀 发射！</button><button class="btn btn-o btn-lg" onclick="pul()" id="btn-ult" disabled>💢 必杀技(怒气${player.rage||0}/100)</button><button class="btn btn-lg" id="btn-auto" onclick="toggleAuto()">🤖 自动战斗</button></div></div>`;
-  setTimeout(dbf,100);uub()}
+  setTimeout(dbf,100);uub();
+  // 危险度着色
+  setTimeout(()=>{
+    const gif=document.getElementById('enemy-gif');
+    if(gif&&enemyData.combat_power){
+      const ratio=enemyData.combat_power/(player.power||1);
+      if(ratio>1.5)gif.classList.add('danger-high');
+      else if(ratio>1.2)gif.classList.add('danger-mid');
+    }
+  },200);
+}
 
 
 function dbf(){const cv=document.getElementById('battle-canvas');if(!cv||!battle)return;
