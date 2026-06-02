@@ -166,6 +166,7 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 #btn-auto{background:linear-gradient(135deg,#444,#666)}
 #btn-auto.active{background:linear-gradient(135deg,#ff6600,#ff8800);animation:pulse 1s infinite}
 @keyframes flipIn{0%{transform:rotateY(0)}100%{transform:rotateY(180deg)}}
+@keyframes jarShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}
 @media(max-width:800px){
   .reward-grid{display:grid;grid-template-columns:repeat(2,100px);justify-content:center;gap:12px}
   .reward-card{width:100px;height:140px}
@@ -1075,7 +1076,52 @@ async function sangel(){enterPage('angel');
   var cans=[{n:"天使魔罐",i:"angel_pot",h:it.angel_pot,t:"angel",d:"基础魔罐"},{n:"华丽银罐",i:"silver_pot",h:it.silver_pot,t:"silver",d:"进阶魔罐"},{n:"耀眼金罐",i:"gold_pot",h:it.gold_pot,t:"gold",d:"高级魔罐"}];
   cans.forEach(c=>{h+='<div class="card" style="display:flex;gap:6px;align-items:center;margin:4px 0"><img src="/picture/feature/angel_can/'+c.i+'.png" onerror="this.style.display=\'none\'" style="width:48px;height:48px;border-radius:8px"><div style="flex:1"><b>'+c.n+'</b><br><span style="font-size:10px;color:var(--dim)">'+c.d+'</span><br><span style="font-size:10px">消耗:4🔨 | 拥有:<b>'+c.h+'</b></span></div><div><button class="btn btn-c btn-sm" onclick="openCan(\''+c.t+'\',1)" '+(c.h<1||it.angel_hammer<4?"disabled":"")+'>开1次</button><button class="btn btn-o btn-sm" onclick="openCan(\''+c.t+'\',10)" '+(c.h<10||it.angel_hammer<40?"disabled":"")+'>开10次</button></div></div>';});
   h+='</div>';document.getElementById("content").innerHTML=h}
-async function openCan(type,count){addLog("🔨 开启魔罐…");const r=await api("/api/angel_can/open",{can_type:type,count:count});if(!r.ok){alert(r.error);return}setPlayer(r.player);rsb();let rew="<div style=\"font-size:11px;color:var(--dim);margin-bottom:6px\">消耗: 魔罐×"+(r.consumed?.pot||count)+"，魔锤×"+(r.consumed?.hammer||count*4)+"</div>";(r.rewards||[]).forEach((rw,i)=>{rew+="<div style=\"margin:3px 0;padding:3px;border:1px solid var(--border);border-radius:6px\"><b>"+(rw.rarity||"?")+"</b><br>";rw.items.forEach(item=>rew+=(item.icon||"🎁")+" "+item.name+" "+(item.n||"")+"<br>");rew+="</div>"});let bonus="";if(r.bonus&&r.bonus.silver)bonus+="<div style=\"color:var(--cyan)\">🎉 赠送华丽银罐×1!</div>";if(r.bonus&&r.bonus.gold)bonus+="<div style=\"color:var(--orange)\">🎉🎉 赠送耀眼金罐×1!</div>";showModal("🏺 魔罐结果",rew+bonus,"<button class=\"btn btn-c\" onclick=\"closeModal();sangel()\">继续</button>")}
+async function openCan(type,count){
+  const btns=document.querySelectorAll('button');btns.forEach(b=>b.disabled=true);
+  addLog("🔨 开启魔罐…");
+  // 3秒摇罐动画
+  const jarOverlay=document.createElement('div');
+  jarOverlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;flex-direction:column';
+  jarOverlay.innerHTML='<div id="jar-anim" style="font-size:80px;animation:jarShake .15s ease infinite">🏺</div><div id="jar-flash" style="color:var(--cyan);font-size:14px;margin-top:16px;min-height:24px"></div>';
+  document.body.appendChild(jarOverlay);
+  // 快速闪过物品
+  const items=['⚔️武器','🛡️装备','💎强化石','🧩碎片','✨祝福','💰金币','⭐经验','🔥神器','💀神话'];
+  let flashIdx=0;
+  const flashInterval=setInterval(()=>{
+    document.getElementById('jar-flash').textContent=items[flashIdx%items.length];
+    flashIdx++;
+  },200);
+  // 后端请求
+  const r=await api("/api/angel_can/open",{can_type:type,count:count});
+  // 等满3秒
+  await new Promise(r=>setTimeout(r,3000-(flashIdx*200)));
+  clearInterval(flashInterval);
+  document.body.removeChild(jarOverlay);
+  btns.forEach(b=>b.disabled=false);
+  if(!r.ok){alert(r.error);return}
+  setPlayer(r.player);rsb();
+  // 检查是否有稀有奖励
+  const hasRare=(r.rewards||[]).some(rw=>['legend','mythic'].includes(rw.rarity));
+  let rew="<div style=\"font-size:11px;color:var(--dim);margin-bottom:6px\">消耗: 魔罐×"+(r.consumed?.pot||count)+"，魔锤×"+(r.consumed?.hammer||count*4)+"</div>";
+  (r.rewards||[]).forEach((rw,i)=>{
+    const clr={common:'#888',rare:'#00ff66',epic:'#cc44ff',legend:'#ff8800',mythic:'#ff3333'}[rw.rarity]||'#888';
+    rew+="<div style=\"margin:3px 0;padding:3px;border:1px solid var(--border);border-radius:6px;border-color:"+clr+"\"><b style=\"color:"+clr+"\">"+(rw.rarity||"?")+"</b><br>";
+    rw.items.forEach(item=>rew+=(item.icon||"🎁")+" "+item.name+" "+(item.n||"")+"<br>");
+    rew+="</div>";
+  });
+  let bonus="";if(r.bonus&&r.bonus.silver)bonus+="<div style=\"color:var(--cyan)\">🎉 赠送华丽银罐×1!</div>";if(r.bonus&&r.bonus.gold)bonus+="<div style=\"color:var(--orange)\">🎉🎉 赠送耀眼金罐×1!</div>";
+  if(hasRare){
+    // 稀有奖励暗屏演出
+    const rareOverlay=document.createElement('div');
+    rareOverlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.95);z-index:10001;display:flex;align-items:center;justify-content:center;flex-direction:column';
+    const clr=(r.rewards||[]).some(rw=>rw.rarity==='mythic')?'#ff3333':'#ff8800';
+    rareOverlay.innerHTML='<div style="font-size:28px;color:'+clr+';font-weight:900;animation:pulse .5s infinite;text-shadow:0 0 30px '+clr+'">🎉 恭喜你获得稀有奖励！</div>';
+    document.body.appendChild(rareOverlay);
+    setTimeout(()=>{document.body.removeChild(rareOverlay);showModal("🏺 魔罐结果",rew+bonus,"<button class=\"btn btn-c\" onclick=\"closeModal();sangel()\">继续</button>")},2000);
+  }else{
+    showModal("🏺 魔罐结果",rew+bonus,"<button class=\"btn btn-c\" onclick=\"closeModal();sangel()\">继续</button>");
+  }
+}
 async function buyHammerPack(){const r=await api('/api/angel_can/buy_hammers',{});if(!r.ok){alert(r.error||'购买失败');return}setPlayer(r.player);rsb();addLog('🔨 已购买天使魔锤×4');sangel()}
 async function exchangeCanFragment(){const r=await api('/api/angel_can/exchange_fragment',{});if(!r.ok){alert(r.error||'兑换失败');return}setPlayer(r.player);rsb();addLog('💎 已用50碎片兑换天使魔罐×1');sangel()}
 

@@ -155,10 +155,30 @@ def update_profile_combat_power(pid):
 # ═══ 排行榜系统 ═══
 LEADERBOARD_FILE = os.path.join(SAVE_DIR, "leaderboard_cache.json")
 NPC_RANKERS = [
-    {"name":"卡波大师","level":18,"combat_power":4200,"avatar":"capoo","weapon_name":"真·牛头怪","wins":45,"dungeon_clears":20,"is_npc":True},
-    {"name":"几维鸟勇者","level":15,"combat_power":3600,"avatar":"kiwi","weapon_name":"炽天使轨道炮","wins":32,"dungeon_clears":15,"is_npc":True},
-    {"name":"暗影刺客","level":12,"combat_power":2800,"avatar":"capoo","weapon_name":"黑洞重力炮","wins":25,"dungeon_clears":10,"is_npc":True},
+    {"name":"卡波大师","base_lv":18,"base_cp":4200,"growth":0.3,"avatar":"capoo","weapon":"真·牛头怪","seed":1},
+    {"name":"几维鸟勇者","base_lv":15,"base_cp":3600,"growth":0.25,"avatar":"kiwi","weapon":"炽天使轨道炮","seed":2},
+    {"name":"暗影刺客","base_lv":12,"base_cp":2800,"growth":0.35,"avatar":"capoo","weapon":"黑洞重力炮","seed":3},
+    {"name":"雷霆战神","base_lv":22,"base_cp":5200,"growth":0.20,"avatar":"capoo","weapon":"雷霆审判炮","seed":4},
+    {"name":"深海领主","base_lv":20,"base_cp":4800,"growth":0.28,"avatar":"kiwi","weapon":"深海龙息弩","seed":5},
 ]
+
+def get_dynamic_npc(npc):
+    """根据时间生成动态NPC属性（每天有小幅自然增长）"""
+    import math, time
+    days = time.time() / 86400  # 从epoch算起的天数
+    seed = npc["seed"]
+    # 用sin曲线产生小幅波动（±15%）
+    fluctuation = math.sin(days / 3 + seed * 1.7) * 0.15
+    growth = 1 + days * npc["growth"] * 0.0005 + fluctuation  # 每天增长0.05%
+    lv = max(1, int(npc["base_lv"] * growth))
+    cp = int(npc["base_cp"] * growth)
+    wins = int(20 + days * 0.1 + math.sin(days / 5 + seed) * 5)
+    return {
+        "name": npc["name"], "level": lv, "combat_power": cp,
+        "avatar": npc["avatar"], "weapon_name": npc["weapon"],
+        "wins": int(wins), "dungeon_clears": int(wins * 0.4),
+        "is_npc": True
+    }
 
 def load_leaderboard_cache():
     if os.path.exists(LEADERBOARD_FILE):
@@ -217,8 +237,7 @@ def refresh_leaderboard(force=False):
     if len(players) < 5:
         max_cp = max((pl["combat_power"] for pl in players),default=3000)
         for npc in NPC_RANKERS:
-            n = dict(npc); n["combat_power"]=int(n["combat_power"]*max_cp/5000)
-            n["level"]=max(1,int(n["level"]*max_cp/5000))
+            n = get_dynamic_npc(npc)
             n["profile_id"] = "npc_" + str(n.get("name","npc"))
             n["display_name"] = n.get("name","NPC")
             n["avatar"] = local_ai_avatar(n["profile_id"])
@@ -587,11 +606,34 @@ EQUIPMENTS={
 # 可掉落装备(非传说)
 DROPPABLE_EQUIP = [eid for eid,e in EQUIPMENTS.items() if e.quality!=Quality.LEGEND]
 
+# ═══ 统一爆率配置 RATE_CONFIG ═══
+RATE_CONFIG = {
+    # 人机练习掉落 (按玩家等级段)
+    "pve_drops": {
+        "1-9":   {"common_frag":0.35,"green_frag":0.12,"blue_frag":0.02,"purple_frag":0,"gold_frag":0},
+        "10-19": {"common_frag":0.28,"green_frag":0.18,"blue_frag":0.05,"purple_frag":0,"gold_frag":0},
+        "20-29": {"common_frag":0.20,"green_frag":0.22,"blue_frag":0.08,"purple_frag":0.01,"gold_frag":0},
+        "30-39": {"common_frag":0.12,"green_frag":0.24,"blue_frag":0.12,"purple_frag":0.02,"gold_frag":0},
+        "40+":   {"common_frag":0,"green_frag":0.20,"blue_frag":0.15,"purple_frag":0.04,"gold_frag":0.01},
+    },
+    # 真人对战奖励系数 (相对于同级副本)
+    "bot_pvp_win":  {"coins_ratio":0.70,"exp_ratio":0.50,"arena_coins":(10,20)},
+    "bot_pvp_lose": {"coins_ratio":0.21,"exp_ratio":0.15,"arena_coins":(3,6)},
+}
+
+def get_pve_rate_config(player_level):
+    """根据玩家等级返回人机掉落概率"""
+    if player_level <= 9: return RATE_CONFIG["pve_drops"]["1-9"]
+    if player_level <= 19: return RATE_CONFIG["pve_drops"]["10-19"]
+    if player_level <= 29: return RATE_CONFIG["pve_drops"]["20-29"]
+    if player_level <= 39: return RATE_CONFIG["pve_drops"]["30-39"]
+    return RATE_CONFIG["pve_drops"]["40+"]
+
 # ═══ 魔罐奖励池 ═══
 ANGEL_CAN_POOLS = {
-    "angel": {"common":0.60,"rare":0.25,"epic":0.10,"legend":0.045,"mythic":0.005},
-    "silver": {"common":0.45,"rare":0.30,"epic":0.16,"legend":0.08,"mythic":0.01},
-    "gold":   {"common":0.30,"rare":0.35,"epic":0.22,"legend":0.11,"mythic":0.02},
+    "angel": {"common":0.45,"rare":0.28,"epic":0.15,"legend":0.07,"mythic":0.05},
+    "silver": {"common":0.30,"rare":0.25,"epic":0.18,"legend":0.12,"mythic":0.10},
+    "gold":   {"common":0.15,"rare":0.20,"epic":0.22,"legend":0.20,"mythic":0.18},
 }
 # 魔罐限定武器ID(副本不掉落)
 POT_EXCLUSIVE_WEAPONS = ["true_minotaur","true_spear","true_boomerang","angel_gift"]
