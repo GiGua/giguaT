@@ -375,7 +375,7 @@ function rewardHtml(r){
     lines.push(`<span style="color:${d>=0?'var(--green)':'var(--red)'}">Rating ${d>=0?'+':''}${d}</span>`);
   }
   if(r.leveled)lines.push(`<b style="color:var(--yellow)">升级！Lv.${r.level||player?.level||''}</b>`);
-  (r.items||[]).forEach(it=>lines.push(`${it.icon||'🎁'} ${it.name||'奖励'} ×${fmtNum(it.n||1)}`));
+  (r.items||[]).forEach(it=>lines.push(`${it.icon||'🎁'} ${it.name||'奖励'} x${fmtNum(it.n||1)}`));
   if(r.rating)lines.push(`<span style="color:var(--cyan)">当前 Rating ${fmtNum(r.rating)}</span>`);
   return lines.join('<br>')||'获得少量奖励';
 }
@@ -490,7 +490,7 @@ async function smm(){
   }else{
     c.innerHTML=`<div class="fade-in" style="text-align:center;padding:50px 20px">
       <h2 style="font-size:30px;color:var(--cyan);margin-bottom:16px">⚡ GiguaT</h2>
-      <p style="color:var(--dim);margin-bottom:24px">Capoo猫猫虫 × Kiwi几维鸟 | 装备系统 | 强化石</p>
+      <p style="color:var(--dim);margin-bottom:24px">Capoo猫猫虫 x Kiwi几维鸟 | 装备系统 | 强化石</p>
       <button class="btn btn-c btn-lg" onclick="sng()" style="margin:8px">🆕 新游戏</button>
       ${r.has_save?`<button class="btn btn-g btn-lg" onclick="loadGame()" style="margin:8px">📂 读取存档</button>`:''}
     </div>`}
@@ -533,7 +533,7 @@ async function spvp(){enterPage('pvp');
     const locked=!d.unlocked;const rec=d.recommended;
     h+=`<div class="wcard" style="${locked?'opacity:.45;cursor:not-allowed':'cursor:pointer'};border-color:${rec?'var(--yellow)':'var(--border)'}" ${locked?'':`onclick="spvpb('${d.id}')"`}>
       <div class="wn" style="color:${rec?'var(--yellow)':'var(--cyan)'}">${i+1}. ${d.name} ${rec?'<span style="font-size:10px;color:var(--green)">推荐</span>':''}</div>
-      <div class="ws">入场等级 Lv.${d.lv}+ | 敌人强度 ×${d.scale}</div>
+      <div class="ws">入场等级 Lv.${d.lv}+ | 敌人强度 x${d.scale}</div>
       <div class="ws">奖励: 💰${d.coins[0]}-${d.coins[1]} | ⭐${d.exp[0]}-${d.exp[1]} | 🧩${d.frag[0]}-${d.frag[1]}</div>
       <div class="wp" style="color:${locked?'var(--red)':'var(--green)'}">${locked?'🔒 等级不足':'⚔️ 可挑战'}</div>
     </div>`;
@@ -1103,7 +1103,11 @@ async function openCan(type,count){
   document.getElementById('jar-anim').textContent='🎁';
   let resultText='';
   if(r.ok&&r.rewards){
-    r.rewards.forEach(rw=>{rw.items.forEach(item=>{resultText+=item.name+(item.n?' ×'+item.n:'')+' ');});});
+    r.rewards.forEach(rw=>{
+      rw.items.forEach(item=>{
+        resultText+=item.name+(item.n?' x'+item.n:'')+' ';
+      });
+    });
   }else{resultText=r.error||'开启失败';}
   document.getElementById('jar-flash').textContent=resultText||'获得神秘奖励';
   document.getElementById('jar-flash').style.color='#ffcc00';
