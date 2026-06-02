@@ -574,6 +574,11 @@ EQUIPMENTS={
     "silver_ring":Equipment("silver_ring","银戒指",EquipSlot.ACCESSORY,Quality.TRUE,atk_bonus=5,luk_bonus=5,desc="闪亮的银戒指",price=220,level_req=5),
     "ruby_amulet":Equipment("ruby_amulet","红宝石项链",EquipSlot.ACCESSORY,Quality.EXTREME,atk_bonus=10,hp_bonus=40,luk_bonus=8,desc="蕴含魔力的宝石",price=650,level_req=10),
     "star_pendant":Equipment("star_pendant","星辰吊坠",EquipSlot.ACCESSORY,Quality.DIVINE,atk_bonus=15,hp_bonus=70,luk_bonus=15,desc="星辰之力的吊坠",price=1500,level_req=16),
+    # ═══ 金色/传说装备 ═══
+    "golden_crown":Equipment("golden_crown","黄金王冠",EquipSlot.HELMET,Quality.LEGEND,defense=28,hp_bonus=120,atk_bonus=8,luk_bonus=12,desc="金光璀璨的传说王冠",price=3000,level_req=25),
+    "golden_plate":Equipment("golden_plate","黄金圣甲",EquipSlot.CHEST,Quality.LEGEND,defense=38,hp_bonus=200,atk_bonus=5,luk_bonus=8,desc="传说级黄金打造的圣甲",price=3500,level_req=25),
+    "golden_boots":Equipment("golden_boots","黄金战靴",EquipSlot.BOOTS,Quality.LEGEND,defense=20,agi_bonus=40,luk_bonus=10,desc="踏风而行的传说战靴",price=2500,level_req=22),
+    "golden_pendant":Equipment("golden_pendant","黄金神坠",EquipSlot.ACCESSORY,Quality.LEGEND,atk_bonus=20,hp_bonus=100,luk_bonus=18,desc="传说级星辰神坠",price=3000,level_req=22),
 }
 # 可掉落装备(非传说)
 DROPPABLE_EQUIP = [eid for eid,e in EQUIPMENTS.items() if e.quality!=Quality.LEGEND]
@@ -1270,25 +1275,43 @@ class BattleEngine:
         return round(a,1),round(min(100,max(10,p)),1)
 
     def calc_damage(self,ac,dc,angle,power,fid=None):
-        wd=ac.wdmg;ta=ac.atk
-        if fid:ia,ip=self.calc_ballistic(fid,self.distance,self.wind);err=(abs(angle-ia)/20+abs(power-ip)/50)*self.distance*0.5
-        else:rad=math.radians(angle);af=math.sin(2*rad);landing=self.distance*af*power/100+self.wind*0.5;err=abs(landing-self.distance)
+        """统一伤害计算: 基础伤害 × 攻击系数 × 防御破防 × 护甲免伤 × 命中 × 随机 × 暴击"""
+        # 基础伤害
+        wd = ac.wdmg
+        # 攻击系数
+        atk_coef = 1 + ac.atk / 1000
+        # 防御系数 × 破防系数
+        defense_coef = dc.defense / 1000 * 0.8
+        break_coef = max(0.3, min(1.0, 1 - ac.luk / 2000))
+        # 护甲免伤 (用防御的50%作为护甲)
+        armor = dc.defense * 0.5
+        armor_coef = max(0.2, min(1.0, 1 - armor / 1000))
+        # 命中率
+        if fid: ia,ip=self.calc_ballistic(fid,self.distance,self.wind); err=(abs(angle-ia)/20+abs(power-ip)/50)*self.distance*0.5
+        else: rad=math.radians(angle); af=math.sin(2*rad); landing=self.distance*af*power/100+self.wind*0.5; err=abs(landing-self.distance)
         hr=1.0 if err<5 else(0.85 if err<15 else(0.6 if err<30 else(0.3 if err<50 else 0.05)))
         agi_shift=max(-0.12,min(0.12,(ac.agility-dc.agility)/2500))
         hr=max(0.03,min(1.0,hr+agi_shift))
-        atk_bonus=1 + ta/(ta+900)
-        defense_reduce=min(0.75, dc.defense/(dc.defense+850))
-        dmg=wd*atk_bonus*hr*(1-defense_reduce)
-        crit=random.random()<ac.crit_rate
-        if crit:dmg*=ac.crit_dmg
-        dmg*=random.uniform(0.9,1.1)
-        if hr<0.1:desc="完全打偏了…"
-        elif hr>=0.95:desc="完美命中！"
-        elif hr>=0.7:desc="不错的命中"
-        elif hr>=0.4:desc="擦边"
-        else:desc="勉强蹭到"
-        if crit:desc="💥暴击！"+desc
-        return int(max(1,dmg)),hr,crit,desc
+        # 平射系数
+        flat_coef = max(0.2, min(5.0, 1 + (ac.atk/1000) - (dc.defense/1000 * 0.8 * break_coef)))
+        # 随机浮动
+        random_factor = random.uniform(0.9, 1.1)
+        # 暴击
+        crit_rate = min(0.35, ac.luk / 3000)
+        is_crit = random.random() < crit_rate
+        crit_multi = random.uniform(1.5, 2.0) if is_crit else 1.0
+        # 最终伤害
+        dmg = wd * flat_coef * armor_coef * hr * random_factor * crit_multi
+        dmg = max(1, int(round(dmg)))
+        # 描述
+        if is_crit: desc=f"💥暴击！"
+        else: desc=""
+        if hr>=0.95: desc+="精准命中！"
+        elif hr>=0.7: desc+="不错的命中"
+        elif hr>=0.4: desc+="擦边命中"
+        elif hr<0.1: desc+="完全打偏了…"
+        else: desc+="勉强蹭到"
+        return dmg, hr, is_crit, desc
 
     def auto_calc(self):
         best_a,best_p,best_f,best_hr=45,80,None,0
@@ -1301,11 +1324,11 @@ class BattleEngine:
 
     def player_act(self,angle,power,fid=None,auto=False):
         if auto:angle,power,fid=self.auto_calc()
-        dmg,hr,crit,desc=self.calc_damage(self.p,self.e,angle,power,fid)
+        dmg,hr,is_crit,desc=self.calc_damage(self.p,self.e,angle,power,fid)
         self.e.current_hp-=dmg;self.p.rage=min(100,self.p.rage+10)
         fn=f" [{fid}]" if fid else ""
-        msg=f"角度{angle}° 力度{power} | {desc}"
-        self.log.append({"who":"player","msg":msg,"dmg":dmg,"crit":crit,"hp_e":max(0,self.e.current_hp)})
+        msg=f"你{desc}，造成{dmg}点伤害。敌人血量:{max(0,self.e.current_hp)}/{self.e.maxhp}"
+        self.log.append({"who":"player","msg":msg,"dmg":dmg,"crit":is_crit,"hp_e":max(0,self.e.current_hp)})
         return dmg,msg,angle,power,fid
 
     def ai_act(self):
@@ -1313,11 +1336,10 @@ class BattleEngine:
         fid=random.choice(["gaopao","banpao","bian65","ding50","pingshe"]) if random.random()<ai_lv else None
         if fid:a,p=self.calc_ballistic(fid,self.distance,self.wind)
         else:a=round(45+random.uniform(-10,10)*(1-ai_lv),1);p=round(70+random.uniform(-15,15)*(1-ai_lv),1)
-        dmg,hr,crit,desc=self.calc_damage(self.e,self.p,a,p,fid)
+        dmg,hr,is_crit,desc=self.calc_damage(self.e,self.p,a,p,fid)
         self.p.current_hp-=dmg;self.e.rage=min(100,self.e.rage+10)
-        fn=f" [{fid}]" if fid else ""
-        msg=f"{self.e.name}{fn} 角度{a}° 力度{p} | {desc}"
-        self.log.append({"who":"enemy","msg":msg,"dmg":dmg,"crit":crit,"hp_p":max(0,self.p.current_hp)})
+        msg=f"{self.e.name}{desc}，造成{dmg}点伤害。你的血量:{max(0,self.p.current_hp)}/{self.p.maxhp}"
+        self.log.append({"who":"enemy","msg":msg,"dmg":dmg,"crit":is_crit,"hp_p":max(0,self.p.current_hp)})
         return dmg,msg
 
     def ultimate(self):

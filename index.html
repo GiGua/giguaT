@@ -770,7 +770,35 @@ async function sinv(){enterPage('inventory');
       ${eq?'<div style="color:var(--green);font-size:10px">✅ 已装备</div>':'<button class="btn btn-sm btn-c" style="margin-top:4px">装备</button>'}
     </div>`;
   });
-  h+='</div></div>';
+  h+='</div>';
+  // 碎片区
+  const cr=await api('/api/craftables');
+  const wf=player&&player.weapon_fragments||{};
+  const ef=player&&player.equip_fragments||{};
+  const wfKeys=Object.keys(wf).filter(k=>wf[k]>0);
+  const efKeys=Object.keys(ef).filter(k=>ef[k]>0);
+  if(wfKeys.length>0||efKeys.length>0){
+    h+='<h3>🧩 武器碎片</h3><div class="wgrid">';
+    wfKeys.forEach(wid=>{
+      const w=cr.weapons?cr.weapons.find(x=>x.id===wid):null;
+      h+=`<div class="wcard" style="border-color:${w?w.color+'40':'#888'}">
+        <div class="wn" style="color:${w?w.color:'#888'}">${w?w.icon||'⚔️':''} ${w?w.name:wid}·碎片</div>
+        <div class="ws">数量: ${wf[wid]} | 需${w?w.need:'70'}片兑换</div>
+        ${w&&!w.owned&&wf[wid]>=w.need?`<button class="btn btn-sm btn-c" onclick="craftWeapon('${wid}')">合成</button>`:''}
+      </div>`;
+    });
+    h+='</div><h3>🛡️ 装备碎片</h3><div class="wgrid">';
+    efKeys.forEach(eid=>{
+      const e=cr.equipment?cr.equipment.find(x=>x.id===eid):null;
+      h+=`<div class="wcard" style="border-color:${e?e.color+'40':'#888'}">
+        <div class="wn" style="color:${e?e.color:'#888'}">${e?e.name:eid}·碎片</div>
+        <div class="ws">数量: ${ef[eid]} | 需${e?e.need:'70'}片兑换</div>
+        ${e&&!e.owned&&ef[eid]>=e.need?`<button class="btn btn-sm btn-c" onclick="craftEquip('${eid}')">合成</button>`:''}
+      </div>`;
+    });
+    h+='</div>';
+  }
+  h+='</div>';
   document.getElementById('content').innerHTML=h}
 
 async function switchWeapon(wid){
