@@ -214,7 +214,7 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 <script>
 const A='';let player=null,battle=null,enemyData=null,cur='menu';
 let dungeonData=null,dungeonStage=0;
-let loginUser=''; let sessionToken=''; // 会话token
+let loginUser=''; let sessionToken=localStorage.getItem('giguat_token')||''; // 持久化token
 
 // ═══════════════ 登录/注册 ═══════════════
 let loginMode='login';
@@ -237,7 +237,7 @@ async function doLogin(){
   err.style.color='var(--red)';
   if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'登录失败';return}
-  loginUser=r.username; sessionToken=r.token||'';
+  loginUser=r.username; sessionToken=r.token||''; localStorage.setItem('giguat_token',sessionToken);
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('hdr-user').textContent='👤 '+loginUser;
   player=r.player;smm();
@@ -255,7 +255,7 @@ async function doRegister(){
   err.style.color='var(--red)';
   if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'注册失败';return}
-  loginUser=r.username; sessionToken=r.token||'';
+  loginUser=r.username; sessionToken=r.token||''; localStorage.setItem('giguat_token',sessionToken);
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('hdr-user').textContent='👤 '+loginUser;
   player=r.player;smm();
@@ -263,7 +263,7 @@ async function doRegister(){
 async function doLogout(){
   if(!confirm('确定退出登录？'))return;
   await api('/api/auth/logout',{});
-  loginUser=''; sessionToken=''; player=null;cur='menu';
+  loginUser=''; sessionToken=''; localStorage.removeItem('giguat_token'); player=null;cur='menu';
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('hdr-user').textContent='';
   document.getElementById('content').innerHTML='';
@@ -434,7 +434,7 @@ function rsb(){
   document.getElementById('sidebar').innerHTML=`
   <div class="fade-in" style="font-size:12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      ${p.avatar?`<img src="${p.avatar}" onerror="this.style.display='none'" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);object-fit:cover">`:`<div style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px">${p.gender=='女'?'♀':'♂'}</div>`}
+      ${p.avatar?`<img src="${p.avatar}" onclick="showAvatarUpload()" onerror="this.style.display='none'" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);object-fit:cover;cursor:pointer" title="点击更换头像">`:`<div onclick="showAvatarUpload()" style="width:40px;height:40px;border-radius:50%;border:2px solid var(--cyan);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer" title="点击上传头像">${p.gender=='女'?'♀':'♂'}</div>`}
       <div><b style="color:var(--yellow);font-size:14px">${p.name}</b> ${p.gender=='女'?'♀':'♂'}<br><span style="color:var(--cyan)">Lv.${p.level}</span> 💰${fmtNum(p.coins)}<br>${ratingBadge(p.rating)}</div>
     </div>
     <div class="sep"></div>

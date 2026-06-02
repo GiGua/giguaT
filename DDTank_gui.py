@@ -1444,6 +1444,8 @@ def _load_session():
     t = request.headers.get("X-Session-Token","")
     if t and t in SESSION:
         player = SESSION[t]
+    else:
+        player = None  # 无有效token时清空，防止串号
 
 # ═══ 全局错误处理
 @app.errorhandler(404)
