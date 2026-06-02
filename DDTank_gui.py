@@ -12,15 +12,18 @@ from flask import Flask, jsonify, request, send_from_directory, send_file
 DATABASE_URL = os.environ.get("DATABASE_URL")
 use_pg = False
 pg_conn = None
+Jsonb = None  # psycopg.types.json.Jsonb, set in init_db()
 
 def init_db():
     """初始化数据库（PostgreSQL优先，本地auth.json fallback）"""
-    global use_pg, pg_conn
+    global use_pg, pg_conn, Jsonb
     if not DATABASE_URL:
         print("[DB] No DATABASE_URL → using local saves/auth.json")
         return
     try:
         import psycopg
+        from psycopg.types.json import Jsonb as _Jsonb
+        Jsonb = _Jsonb
         pg_conn = psycopg.connect(DATABASE_URL)
         use_pg = True
         with pg_conn.cursor() as cur:
@@ -1445,7 +1448,7 @@ def save_p():
                             INSERT INTO player_saves (user_id, save_data, updated_at)
                             VALUES (%s, %s, CURRENT_TIMESTAMP)
                             ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
-                        """, (uid, data))
+                        """, (uid, _jsonb(data)))
                     pg_conn.commit()
                     print(f"[DB] save_p OK: {player.name} (uid={uid}) lv={player.level}")
                 else:
@@ -1503,7 +1506,7 @@ def api_save():
                         INSERT INTO player_saves (user_id, save_data, updated_at)
                         VALUES (%s, %s, CURRENT_TIMESTAMP)
                         ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
-                    """, (row[0], player.to_dict()))
+                    """, (row[0], _jsonb(player.to_dict())))
             pg_conn.commit()
         print(f"[SAVE] user={player.name} saved (pg={'yes' if use_pg else 'no'})")
         return jsonify({"ok":True,"msg":"保存成功"})
@@ -1648,6 +1651,12 @@ def save_auth(data):
         except Exception as e:
             print(f"[AUTH] local save error: {e}")
 
+def _jsonb(val):
+    """安全包装 dict 为 psycopg JSONB 适配类型"""
+    if Jsonb and isinstance(val, dict):
+        return Jsonb(val)
+    return val
+
 def hash_password(pw):
     return hashlib.sha256(pw.encode('utf-8')).hexdigest()
 
@@ -1661,7 +1670,7 @@ def pg_save_player(user_id, player_obj):
                 INSERT INTO player_saves (user_id, save_data, updated_at)
                 VALUES (%s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (user_id) DO UPDATE SET save_data = EXCLUDED.save_data, updated_at = CURRENT_TIMESTAMP
-            """, (user_id, save_data))
+            """, (user_id, _jsonb(save_data)))
         pg_conn.commit()
     except Exception as e:
         print(f"[DB] pg_save_player error: {e}")
@@ -1716,7 +1725,7 @@ def api_auth_register():
                 c.init_battle()
                 cur.execute(
                     "INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)",
-                    (uid, c.to_dict()))
+                    (uid, _jsonb(c.to_dict())))
             pg_conn.commit()
             # 仍写本地 profiles 用于排行榜等
             pid = str(uuid.uuid4())[:8]
@@ -1778,7 +1787,7 @@ def api_auth_login():
                     print(f"[AUTH] player_saves missing for uid={uid}, auto-creating...")
                     c = Character(name=username)
                     c.init_battle()
-                    cur.execute("INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)", (uid, c.to_dict()))
+                    cur.execute("INSERT INTO player_saves (user_id, save_data) VALUES (%s, %s)", (uid, _jsonb(c.to_dict())))
                     pg_conn.commit()
                 else:
                     data = srow[0]
