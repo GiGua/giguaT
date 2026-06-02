@@ -214,7 +214,7 @@ h3{font-size:14px;color:var(--yellow);margin:6px 0}
 <script>
 const A='';let player=null,battle=null,enemyData=null,cur='menu';
 let dungeonData=null,dungeonStage=0;
-let loginUser=''; // 当前登录用户名
+let loginUser=''; let sessionToken=''; // 会话token
 
 // ═══════════════ 登录/注册 ═══════════════
 let loginMode='login';
@@ -237,7 +237,7 @@ async function doLogin(){
   err.style.color='var(--red)';
   if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'登录失败';return}
-  loginUser=r.username;
+  loginUser=r.username; sessionToken=r.token||'';
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('hdr-user').textContent='👤 '+loginUser;
   player=r.player;smm();
@@ -255,7 +255,7 @@ async function doRegister(){
   err.style.color='var(--red)';
   if(r.offline){err.textContent='网络连接失败，请检查网络';return}
   if(!r.ok){err.textContent=r.error||'注册失败';return}
-  loginUser=r.username;
+  loginUser=r.username; sessionToken=r.token||'';
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('hdr-user').textContent='👤 '+loginUser;
   player=r.player;smm();
@@ -263,7 +263,7 @@ async function doRegister(){
 async function doLogout(){
   if(!confirm('确定退出登录？'))return;
   await api('/api/auth/logout',{});
-  loginUser='';player=null;cur='menu';
+  loginUser=''; sessionToken=''; player=null;cur='menu';
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('hdr-user').textContent='';
   document.getElementById('content').innerHTML='';
@@ -381,7 +381,9 @@ function rewardHtml(r){
 }
 
 async function api(u,d=null){
-  const o=d?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}:{};
+  const h={'Content-Type':'application/json'};
+  if(sessionToken)h['X-Session-Token']=sessionToken;
+  const o=d?{method:'POST',headers:h,body:JSON.stringify(d)}:{headers:h};
   try{
     const res=await fetch(A+u,o);
     const text=await res.text();

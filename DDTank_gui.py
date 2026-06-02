@@ -1407,7 +1407,19 @@ class BattleEngine:
 
 app=Flask(__name__)
 
-# ═══ 全局错误处理：所有错误返回JSON，不让前端收到HTML ═══
+# ═══ 多用户会话隔离 ═══
+import secrets as _sec
+SESSION = {}
+def _make_token(): return _sec.token_hex(16)
+
+@app.before_request
+def _load_session():
+    global player
+    t = request.headers.get("X-Session-Token","")
+    if t and t in SESSION:
+        player = SESSION[t]
+
+# ═══ 全局错误处理
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"ok":False,"error":"接口不存在","status":404}), 404
@@ -1779,7 +1791,8 @@ def api_auth_register():
             profiles["active_profile_id"] = pid
             save_profiles(profiles)
             ACTIVE_PROFILE_ID = pid; player = c; DB_USER_ID = uid
-            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
+            tok = _make_token(); SESSION[tok] = c
+            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres","token":tok})
         except Exception as e:
             pg_conn.rollback()
             return jsonify({"ok":False,"error":f"注册失败: {str(e)[:100]}"})
@@ -1802,7 +1815,8 @@ def api_auth_register():
     auth[pid] = {"username":username,"password_hash":pw_hash,"created_at":now}
     save_auth(auth)
     ACTIVE_PROFILE_ID = pid; player = c
-    return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local"})
+    tok = _make_token(); SESSION[tok] = c
+    return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local","token":tok})
 
 @app.route('/api/auth/login',methods=['POST'])
 def api_auth_login():
@@ -1853,7 +1867,8 @@ def api_auth_login():
                 player.angel_hammer = max(player.angel_hammer, 200)
                 save_p()
                 print(f"[AUTH] migration gift: {username} got 50 pots + 200 hammers")
-            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres"})
+            tok = _make_token(); SESSION[tok] = c
+            return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"postgres","token":tok})
         except Exception as e:
             return jsonify({"ok":False,"error":f"登录异常: {str(e)[:100]}"})
 
@@ -1866,7 +1881,8 @@ def api_auth_login():
                 if not p:return jsonify({"ok":False,"error":"存档数据丢失"})
                 profiles=load_profiles();profiles["active_profile_id"]=pid;save_profiles(profiles)
                 ACTIVE_PROFILE_ID=pid;player=p;player.init_battle()
-                return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local"})
+                tok = _make_token(); SESSION[tok] = p
+                return jsonify({"ok":True,"profile_id":pid,"username":username,"player":pd(),"db":"local","token":tok})
             else:
                 return jsonify({"ok":False,"error":"密码错误"})
     return jsonify({"ok":False,"error":"用户名不存在"})
