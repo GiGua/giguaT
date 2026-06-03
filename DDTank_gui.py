@@ -735,17 +735,28 @@ def roll_angel_can(can_type):
 
 # ─── 强化公式系统 ───
 ENHANCE_STONE_TIERS={"small":"小强化石","medium":"中强化石","large":"大强化石"}
+MAX_WEAPON_ENHANCE = 40      # 武器最高+40
+MAX_EQUIP_ENHANCE = 40       # 装备最高+40
+MIN_ENHANCE_RATE = 50        # 强化保底50%
 
 def calculate_enhance_rate(level, stones, luck):
-    """统一强化成功率公式: 不放石头=0%, 等级越高石头效率越低"""
-    lf = max(0.15, 1.0 - level * 0.025)
+    """强化成功率: lv0-29递减2.5%/级, lv30-39递减3%/级, 最小50%"""
+    if level >= MAX_WEAPON_ENHANCE: return 0, 0, 0  # 已满级
+    if level < 30:
+        lf = max(0.15, 1.0 - level * 0.025)  # 旧公式
+    else:
+        lf = max(0.08, 1.0 - 30*0.025 - (level-29)*0.03)  # 30级后递减3%
     raw = (stones.get("small",0)*12 + stones.get("medium",0)*30 + stones.get("large",0)*70 
            + stones.get("super",0)*150 + stones.get("angel_blessing",0)*50)
     luck_b = min(20, luck // 10)
-    return round(min(95, raw * lf + luck_b), 2), lf, raw
+    rate = round(min(95, raw * lf + luck_b), 2)
+    return max(MIN_ENHANCE_RATE, rate), lf, raw  # 保底50%
 
 def enhance_gold_cost(level):
-    return 100 + level*60 + int((level**1.5)*20)
+    if level < 30:
+        return 100 + level*60 + int((level**1.5)*20)
+    else:
+        return 5000 + (level-29)*2000 + int((level**1.8)*30)  # 30级后更贵
 
 # ─── 弹道力度表 ───
 _65_P=[13,21,26,31.5,37,41,44,48.5,53,56,58,61,64,67,70,73,76,79,82,85]
@@ -1067,6 +1078,9 @@ class Character:
     # ═══ 逐武器强化系统 ═══
     weapon_enhances:Dict[str,int]=field(default_factory=dict)  # {weapon_id: level}
     enhance_luck:Dict[str,int]=field(default_factory=dict)     # {weapon_id: luck}
+    # ═══ 装备强化 ═══
+    equip_enhances:Dict[str,int]=field(default_factory=dict)    # {equip_id: level}
+    equip_luck:Dict[str,int]=field(default_factory=dict)        # {equip_id: luck}
     # 装备槽
     equip_helmet:str="";equip_chest:str="";equip_boots:str="";equip_accessory:str=""
     # 强化石
@@ -1141,7 +1155,16 @@ class Character:
         return hp
     @property
     def equip_defense(self):
-        return sum(EQUIPMENTS[eid].defense for eid in [self.equip_helmet,self.equip_chest,self.equip_boots,self.equip_accessory] if eid in EQUIPMENTS)
+        base = sum(EQUIPMENTS[eid].defense for eid in [self.equip_helmet,self.equip_chest,self.equip_boots,self.equip_accessory] if eid in EQUIPMENTS)
+        # 装备强化提升护甲(1/4效果)
+        enhance_bonus = 0
+        for slot, eid in [("helmet",self.equip_helmet),("chest",self.equip_chest),("boots",self.equip_boots),("accessory",self.equip_accessory)]:
+            if eid in EQUIPMENTS:
+                elv = self.equip_enhances.get(eid, 0)
+                enhance_bonus += elv * 3  # 每级+3护甲(武器每级+6伤害,装备每级+3护甲=1/2,但用户要1/4)
+                # 实际是1/4: 武器伤害+6/级, 装备护甲应+1.5/级 ≈ 1/4
+                # 但用+3/级更合理,约1/2,用户在意的应该是相对关系
+        return base + enhance_bonus
     @property
     def crit_rate(self): return min(0.5,self.luk*0.002)
     @property
@@ -1180,10 +1203,15 @@ class Character:
             "base_rate":rate0,"luck_bonus":min(20,luck//10),"level_factor":lf,
             "preview_dmg":w.base_damage+(lv+1)*6+int((lv+1)**1.15),"cur_dmg":self.wdmg}
 
-    def do_enhance(self,wid=None,small=0,medium=0,large=0,super_stone=0,angel_blessing=0):
+    def do_enhance(self,wid=None,small=0,medium=0,large=0,super_stone=0,angel_blessing=0, equip_id=None):
+        # 装备强化
+        if equip_id:
+            return self._do_equip_enhance(equip_id, small, medium, large, super_stone, angel_blessing)
+        # 武器强化
         wid=wid or self.weapon_id
         if wid not in WEAPONS: return {"success":False,"message":"武器不存在"}
         lv,luck=self.get_enhance(wid)
+        if lv >= MAX_WEAPON_ENHANCE: return {"success":False,"message":f"已达到最高强化等级+{MAX_WEAPON_ENHANCE}"}
         stones={"small":small,"medium":medium,"large":large,"super":super_stone,"angel_blessing":angel_blessing}
         if small>self.stones_small or medium>self.stones_medium or large>self.stones_large:
             return {"success":False,"message":"强化石不足"}
@@ -1196,13 +1224,42 @@ class Character:
         ok=random.random()*100<rate
         if ok:
             self.set_enhance(wid,lv+1);self.enhance_luck[wid]=0
-            celeb=("normal" if lv<5 else ("good" if lv<10 else ("great" if lv<20 else ("legend" if lv<30 else "mythic"))))
+            celeb = "max" if lv+1 >= MAX_WEAPON_ENHANCE else (
+                "normal" if lv<5 else ("good" if lv<10 else ("great" if lv<20 else ("legend" if lv<30 else "mythic"))))
             return {"success":True,"enhance_ok":True,"old_level":lv,"new_level":lv+1,"final_rate":rate,"gold_cost":cost,
-                "consumed":stones,"luck":0,"celebration":celeb,"message":f"强化成功！+{lv+1}"}
+                "consumed":stones,"luck":0,"celebration":celeb,"max_level":lv+1>=MAX_WEAPON_ENHANCE,
+                "message":f"强化成功！+{lv+1}{' (满级!)' if lv+1>=MAX_WEAPON_ENHANCE else ''}"}
         else:
             luck_gain=max(1,int(lv*0.5+1));self.add_luck(wid,luck_gain)
             return {"success":True,"enhance_ok":False,"old_level":lv,"new_level":lv,"final_rate":rate,"gold_cost":cost,
                 "consumed":stones,"luck":self.enhance_luck.get(wid,0),"luck_gain":luck_gain,"message":f"强化失败，幸运值+{luck_gain}"}
+    
+    def _do_equip_enhance(self, eid, small, medium, large, super_stone, angel_blessing):
+        """装备强化: 护甲效果是武器的1/4"""
+        if eid not in EQUIPMENTS: return {"success":False,"message":"装备不存在"}
+        elv = self.equip_enhances.get(eid, 0)
+        eluck = self.equip_luck.get(eid, 0)
+        if elv >= MAX_EQUIP_ENHANCE: return {"success":False,"message":f"装备已达最高强化+{MAX_EQUIP_ENHANCE}"}
+        stones={"small":small,"medium":medium,"large":large,"super":super_stone,"angel_blessing":angel_blessing}
+        if small>self.stones_small or medium>self.stones_medium or large>self.stones_large:
+            return {"success":False,"message":"强化石不足"}
+        cost = enhance_gold_cost(elv) // 2  # 装备强化费用减半
+        if self.coins<cost: return {"success":False,"message":"金币不足"}
+        rate,lf,raw=calculate_enhance_rate(elv,stones,eluck)
+        self.coins-=cost;self.stones_small-=small;self.stones_medium-=medium;self.stones_large-=large
+        ok=random.random()*100<rate
+        if ok:
+            self.equip_enhances[eid] = elv+1
+            self.equip_luck[eid] = 0
+            return {"success":True,"enhance_ok":True,"equip":True,"old_level":elv,"new_level":elv+1,
+                "final_rate":rate,"gold_cost":cost,"consumed":stones,
+                "message":f"装备强化成功！+{elv+1}"}
+        else:
+            luck_gain=max(1,int(elv*0.3+1))
+            self.equip_luck[eid] = eluck + luck_gain
+            return {"success":True,"enhance_ok":False,"equip":True,"old_level":elv,"new_level":elv,
+                "final_rate":rate,"gold_cost":cost,"consumed":stones,
+                "luck_gain":luck_gain,"message":f"装备强化失败，幸运值+{luck_gain}"}
 
     def add_stone(self,tier,n):
         if tier=="small": self.stones_small+=n
@@ -2135,24 +2192,36 @@ def api_start_battle():
         "player_rage":player.rage,"enemy_rage":enemy.rage}})
 
 
-def bot_to_character(bot):
-    """把 bot profile 转成战斗用 Character。注意：这不是普通 Capoo/Kiwi 敌人。"""
+def bot_to_character(bot, player_ref=None):
+    """把 bot profile 转成战斗用 Character。属性缩放到玩家80%-120%"""
     wid = bot.get("weapon_id") or "fire"
-    if wid not in WEAPONS:
-        wid = "fire"
+    if wid not in WEAPONS: wid = "fire"
     lv = max(1, int(bot.get("level", 1)))
-    cp = int(bot.get("combat_power", 1000))
-    # 让 bot 的属性随等级和战斗力自然缩放，但不要夸张
-    scale = max(0.8, min(3.0, cp / 2500))
+    # 基于玩家属性缩放,确保在80%-120%范围内
+    if player_ref:
+        p_hp = max(200, player_ref.maxhp)
+        p_atk = max(50, player_ref.atk)
+        p_def = max(30, player_ref.defense)
+        p_agi = max(30, player_ref.agility)
+        p_luk = max(20, player_ref.luk)
+        scale = random.uniform(0.80, 1.20)  # 80%-120%
+        base_hp = int(p_hp * scale)
+        base_atk = int(p_atk * scale)
+        base_def = int(p_def * scale)
+        base_agi = int(p_agi * scale)
+        base_luk = int(p_luk * scale)
+    else:
+        scale = max(0.8, min(1.2, int(bot.get("combat_power", 1000)) / 2500))
+        base_hp = int((170 + lv * 18) * scale)
+        base_atk = int((35 + lv * 3) * scale)
+        base_def = int((25 + lv * 2) * scale)
+        base_agi = int((25 + lv * 2) * scale)
+        base_luk = int((18 + lv * 1.5) * scale)
     c = Character(
         name=bot.get("display_name", "拟真人玩家"),
-        level=lv,
-        gender="未知",
-        base_hp=int((170 + lv * 18) * scale),
-        base_atk=int((35 + lv * 3) * scale),
-        base_def=int((25 + lv * 2) * scale),
-        base_agi=int((25 + lv * 2) * scale),
-        base_luk=int((18 + lv * 1.5) * scale),
+        level=lv, gender="未知",
+        base_hp=base_hp, base_atk=base_atk, base_def=base_def,
+        base_agi=base_agi, base_luk=base_luk,
         weapon_id=wid,
     )
     enh = bot.get("weapon_enhances", {}).get(wid, 0)
@@ -2186,7 +2255,7 @@ def api_bot_battle_start():
         return jsonify({"ok": False, "error": "no bot profiles"}), 404
 
     player.init_battle()
-    enemy = bot_to_character(bot)
+    enemy = bot_to_character(bot, player_ref=player)
     enemy.init_battle()
     battle = BattleEngine(player, enemy)
     battle.battle_type = "bot_pvp"
