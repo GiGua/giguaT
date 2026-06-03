@@ -159,12 +159,13 @@ def roll_rogue_cards(count=3, min_quality=None):
     return random.sample(pool, min(count, len(pool)))
 
 def calc_rogue_reward(tier, node_type, completed_nodes):
-    """计算单场奖励: 合理数值, 奖励倍数1.0+tier*0.15"""
-    # 基础: 随难度增长,但不过高
-    base_gold = 40 + tier * 30     # tier1=70, tier10=340, tier20=640
-    base_exp = 60 + tier * 40       # tier1=100, tier10=460, tier20=860
-    node_mult = {"monster":1.0,"elite":2.0,"event":0.3,"item":0.2,"card":0.1,"shop":0,"rest":0,"boss":3.5}
-    tier_mult = 1.0 + tier * 0.15   # tier1=1.15, tier10=2.5, tier20=4.0
+    """计算单场奖励: 普通怪极少, BOSS大量"""
+    # 基础微量
+    base_gold = 20 + tier * 6       # tier1=26, tier10=80, tier20=140
+    base_exp = 30 + tier * 8         # tier1=38, tier10=110, tier20=190
+    # 怪物极少, boss大量
+    node_mult = {"monster":1.0,"elite":2.5,"event":0.2,"item":0.1,"card":0,"shop":0,"rest":0,"boss":12.0}
+    tier_mult = 1.0 + tier * 0.08    # tier1=1.08, tier10=1.8, tier20=2.6
     gold = round(base_gold * node_mult.get(node_type,1.0) * tier_mult)
     exp = round(base_exp * node_mult.get(node_type,1.0) * tier_mult)
     return gold, exp
@@ -276,6 +277,8 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
         if room_type in ("monster","elite","boss"):
             # 生成敌人
             completed = len(rr.get("completed_node_ids",[]))
+            try: cp = p.power
+            except: cp = 2000
             enemy = generate_rogue_enemy(rr["tier"], room_type, completed, player_power=cp)
             rr["current_enemy"] = enemy
             save_rogue_progress(p, rr)
@@ -666,7 +669,9 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
             return fj({"ok":False,"error":"已使用过"})
         
         result_msg = ""
-        if action == "heal":
+        if action == "skip":
+            result_msg = "跳过休息"
+        elif action == "heal":
             result_msg = "恢复35%HP"
         elif action == "upgrade":
             if card_id and rr.get("selected_cards"):

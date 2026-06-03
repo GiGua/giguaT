@@ -1369,7 +1369,12 @@ async function rogueRest(action,cardId){const r=await api('/api/rogue/rest',{act
 async function rogueRetire(){await api('/api/rogue/retire',{});srogue();}
 function showRogueEvent(evt){let h='<h3>❓ '+evt.title+'</h3><p style="color:var(--dim);font-size:11px">'+evt.desc+'</p>';evt.choices.forEach(c=>{h+='<button class="btn btn-c" style="margin:4px;width:100%" onclick="rogueEventChoice(\''+evt.id+'\',\''+c.id+'\')">'+c.text+'</button>'});document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
 function rogueShowShop(r){let h='<h3>🏪 交易所</h3><p style="font-size:10px">⚡'+(rogueRun.tokens||0)+'</p>';(r.shop_items||[]).forEach(si=>{const cl=si.cost_type==='tokens'?'⚡'+si.cost:'💰'+si.cost;h+='<div class="card" style="padding:6px;margin:4px;display:flex;justify-content:space-between"><span><b>'+si.name+'</b><br><span style="font-size:9px;color:var(--dim)">'+si.desc+'</span></span><button class="btn btn-c btn-sm" onclick="rogueShopBuy(\''+si.id+'\')">'+cl+'</button></div>'});h+='<button class="btn btn-r btn-sm" onclick="rogueShopLeave()" style="margin-top:6px">离开</button>';document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
-function rogueShowRest(r){let h='<h3>🔥 休息营地</h3>';(r.rest_options||[]).forEach(o=>{if(o.available===false)return;const onclick=o.effect==='upgrade_card'?"rogueRest('upgrade','"+((rogueRun.selected_cards||[])[0]?.id||'')+"')":"rogueRest('"+o.effect+"')";h+='<button class="btn btn-c" style="margin:4px;width:100%" onclick="'+onclick+'">'+o.text+'</button>'});document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
+function rogueShowRest(r){let h='<h3>🔥 休息营地</h3>';(r.rest_options||[]).forEach(o=>{if(o.available===false)return;const onclick=o.effect==='upgrade_card'?"rogueRest('upgrade','"+((rogueRun.selected_cards||[])[0]?.id||'')+"')":"rogueRest('"+o.effect+"')";h+='<button class="btn btn-c" style="margin:4px;width:100%" onclick="'+onclick+'">'+o.text+'</button>'});h+='<button class="btn btn-r btn-sm" style="margin-top:8px;width:100%" onclick="rogueRestSkip()">跳过休息</button>';document.getElementById('mc').innerHTML=h;document.getElementById('mo').classList.add('sh');}
+async function rogueRestSkip(){
+  const r=await api('/api/rogue/rest',{action:'skip',card_id:''});
+  if(!r.ok){alert(r.error);return}
+  rogueRun=r.rogue_run;closeModal();rogueShowMap();
+}
 
 
 // ═══════════════ 聊天+公告 ═══════════════
