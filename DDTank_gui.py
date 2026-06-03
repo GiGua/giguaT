@@ -2670,7 +2670,10 @@ def api_start_dungeon():
     dg=next((d for d in DUNGEONS if d["id"]==did),None)
     if not dg:return jsonify({"ok":False,"msg":"副本不存在"})
     cp_req = max(500, dg["lv"]*350 + dg["lv"]**2*3)
-    if player.power < cp_req:return jsonify({"ok":False,"msg":f"战力不足，需要{cp_req}战斗力"})
+    try: pp = player.power if player else 0
+    except: pp = 500
+    if pp < cp_req:
+        return jsonify({"ok":False,"msg":f"战力不足，需要{cp_req}战斗力(当前{pp})"})
     player.init_battle()
     st=dg["stages"][0]
     enemy=gen_kiwi_enemy(player.level,st["d"],st.get("boss",False));enemy.init_battle()
