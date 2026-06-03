@@ -1282,17 +1282,26 @@ async function rogueEnterNode(nodeId){
 }
 
 async function showRogueBattle(){
-  // 初始化战斗
   const r=await api('/api/rogue/battle/start',{});
   if(!r.ok){alert(r.error||'战斗初始化失败');srogue();return}
-  rogueRun=r.rogue_run;
-  rogueBattle=r.battle;
+  rogueRun=r.rogue_run;rogueBattle=r.battle;
   if(!rogueBattle)return;
   renderRogueBattlePage();
 }
 
+function rougeStatsHtml(bs){
+  return `<div class="enemy-stat-grid">
+    <div class="sr"><span class="sl">攻击</span><span class="sv" style="color:var(--red)">${fmtNum(bs.enemy_atk)}</span></div>
+    <div class="sr"><span class="sl">防御</span><span class="sv" style="color:var(--blue)">${fmtNum(bs.enemy_def)}</span></div>
+    <div class="sr"><span class="sl">敏捷</span><span class="sv" style="color:var(--green)">${fmtNum(bs.enemy_agi)}</span></div>
+    <div class="sr"><span class="sl">幸运</span><span class="sv" style="color:var(--purple)">${fmtNum(bs.enemy_luk)}</span></div>
+    <div class="sr"><span class="sl">⚡伤害</span><span class="sv" style="color:var(--orange)">${fmtNum(bs.enemy_dmg)}</span></div>
+    <div class="sr"><span class="sl">🛡️护甲</span><span class="sv" style="color:var(--cyan)">${fmtNum(bs.enemy_armor)}</span></div>
+  </div>`;
+}
+
 function renderRogueBattlePage(){
-  const bs=rogueBattle;
+  const bs=rogueBattle;if(!bs)return;
   const hue=bs.enemy_hue||0;const v=bs.enemy_variant||'normal';
   const isFB=v==='final_boss';const cls=isFB?'final-kiwi-boss':'kiwi-enemy';
   const filter=isFB?'hue-rotate('+hue+'deg) saturate(2) contrast(1.25) drop-shadow(0 0 18px #b000ff)':'hue-rotate('+hue+'deg) saturate(1.4) brightness(1.05)';
@@ -1300,41 +1309,46 @@ function renderRogueBattlePage(){
   c.innerHTML=
     '<div class="fade-in"><h2>⚔️ 星蚀试炼</h2>'+
     '<div class="battle-top"><div class="battle-vs">'+
-    '<div style="display:flex;justify-content:space-between"><span style="color:var(--green)">🟢 '+player.name+'</span><span style="color:var(--red)">🔴 '+bs.enemy_name+'</span></div>'+
-    '<div style="font-size:12px;margin:3px 0"><span style="color:var(--dim)">HP '+bs.player_hp+'/'+bs.player_maxhp+'</span><span style="float:right;color:var(--dim)">HP '+bs.enemy_hp+'/'+bs.enemy_maxhp+'</span></div>'+
-    '<div style="display:flex;justify-content:space-between"><div style="width:'+Math.max(0,bs.player_hp/bs.player_maxhp*100)+'%;height:6px;background:var(--green);border-radius:3px"></div><div style="width:100%"></div></div>'+
-    '<div style="display:flex;justify-content:space-between;margin-top:2px"><div style="width:100%"></div><div style="width:'+Math.max(0,bs.enemy_hp/bs.enemy_maxhp*100)+'%;height:6px;background:var(--red);border-radius:3px;margin-left:auto"></div></div>'+
+    '<div style="display:flex;justify-content:space-between;align-items:center">'+
+    '<span style="color:var(--green)">🟢 '+player.name+' '+cpBadge(player.power||0)+'</span>'+
+    '<span style="color:var(--red)">🔴 '+bs.enemy_name+' ⚡'+fmtNum(bs.enemy_power)+'</span></div>'+
+    '<div style="font-size:12px;margin:3px 0"><span style="color:var(--dim)">生命 '+bs.player_hp+'/'+bs.player_maxhp+'</span><span style="float:right;color:var(--dim)">生命 '+bs.enemy_hp+'/'+bs.enemy_maxhp+'</span></div>'+
+    '<div style="height:6px;background:#1a1a30;border-radius:3px;margin:2px 0"><div style="width:'+Math.max(1,bs.player_hp/bs.player_maxhp*100)+'%;height:6px;background:var(--green);border-radius:3px"></div></div>'+
+    '<div style="height:6px;background:#1a1a30;border-radius:3px"><div style="width:'+Math.max(1,bs.enemy_hp/bs.enemy_maxhp*100)+'%;height:6px;background:var(--red);border-radius:3px"></div></div>'+
     '</div></div>'+
-    '<div class="rogue-enemy-wrap"><img class="'+cls+'" src="'+bs.enemy_sprite+'" style="filter:'+filter+';--kiwi-hue:'+hue+'deg"><div class="enemy-name">'+bs.enemy_name+' ⚡'+(bs.enemy_power||0)+'</div></div>'+
-    '<div style="text-align:center;color:var(--dim);font-size:11px;margin:4px 0">回合: <b>'+bs.turn+'</b> | 攻击加成: +'+(bs.attack_bonus||0)+'%</div>'+
-    '<div class="action-row"><button class="btn btn-c btn-lg" onclick="rogueAttack()" id="btn-rogue-atk">⚔️ 攻击!</button></div>'+
-    '<div id="rogue-battle-log" style="margin-top:8px;max-height:150px;overflow-y:auto;font-size:11px;color:var(--dim)"></div></div>';
+    '<div class="enemy-gif-wrap"><img class="'+cls+'" src="'+bs.enemy_sprite+'" alt="'+bs.enemy_name+'" style="filter:'+filter+';--kiwi-hue:'+hue+'deg"><div class="enemy-name" style="color:var(--red)">'+bs.enemy_name+'</div></div>'+
+    rougeStatsHtml(bs)+
+    '<div style="text-align:center;color:var(--dim);font-size:11px;margin:4px 0">回合: <b>'+bs.turn+'</b> | ⚔️加成: +'+(bs.attack_bonus||0)+'%</div>'+
+    '<div class="action-row">'+
+    '<button class="btn btn-c btn-lg" onclick="rogueAttack()" id="btn-rogue-atk">⚔️ 攻击!</button>'+
+    '<button class="btn btn-sm" onclick="rogueShowMap()" style="margin-left:8px">↩ 返回地图</button>'+
+    '<button class="btn btn-sm btn-g" onclick="rogueSave()">💾 保存</button>'+
+    '</div>'+
+    '<div id="rogue-battle-log" style="margin-top:8px;max-height:140px;overflow-y:auto;font-size:11px;color:var(--dim)"></div></div>';
+}
+
+async function rogueSave(){
+  await api('/api/rogue/battle/start',{}); // 触发后端保存
+  addLog('💾 已保存进度');
 }
 
 async function rogueAttack(){
   const btn=document.getElementById('btn-rogue-atk');if(btn)btn.disabled=true;
   const r=await api('/api/rogue/battle/act',{});
   if(!r.ok){alert(r.error||'行动失败');if(btn)btn.disabled=false;return}
-  rogueRun=r.rogue_run;rogueBattle=r.battle;
-  
-  // 显示日志
+  rogueRun=r.rogue_run;rogueBattle=r.battle||rogueBattle;
   const logEl=document.getElementById('rogue-battle-log');
   if(logEl&&r.logs){r.logs.forEach(l=>{logEl.innerHTML+='<div>'+l+'</div>'});logEl.scrollTop=logEl.scrollHeight}
-  
   if(r.won||r.player_dead){
-    // 战斗结束
     if(r.won){
-      const msg='💰+'+r.gold+' ⭐+'+r.exp;
-      if(r.cards&&r.cards.length>0){
-        showRogueCards(r.cards,'胜利! '+msg);
-      }else{
-        showModal('✅ 胜利!',msg,'<button class="btn btn-c" onclick="closeModal();rogueShowMap()">继续</button>');
-      }
+      const msg='💰+'+fmtNum(r.gold)+' ⭐+'+fmtNum(r.exp);
+      addLog('🗼 胜利! '+msg);
+      if(r.cards&&r.cards.length>0){showRogueCards(r.cards,'胜利! '+msg);return}
+      showModal('✅ 胜利!',msg,'<button class="btn btn-c" onclick="closeModal();rogueShowMap()">继续</button>');
     }else{
       showModal('💀 失败',r.message||'止步于此','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');
     }
   }else{
-    // 继续战斗,刷新UI
     renderRogueBattlePage();
     if(btn)btn.disabled=false;
   }

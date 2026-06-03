@@ -276,7 +276,7 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
         if room_type in ("monster","elite","boss"):
             # 生成敌人
             completed = len(rr.get("completed_node_ids",[]))
-            enemy = generate_rogue_enemy(rr["tier"], room_type, completed)
+            enemy = generate_rogue_enemy(rr["tier"], room_type, completed, player_power=cp)
             rr["current_enemy"] = enemy
             save_rogue_progress(p, rr)
             result["battle_ready"] = True
@@ -320,7 +320,9 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
         enemy = rr.get("current_enemy")
         if not enemy:
             completed = len(rr.get("completed_node_ids",[]))
-            enemy = generate_rogue_enemy(rr["tier"], node["type"], completed)
+            try: cp = p.power
+            except: cp = 2000
+            enemy = generate_rogue_enemy(rr["tier"], node["type"], completed, player_power=cp)
             rr["current_enemy"] = enemy
         
         # 初始化战斗状态
@@ -343,6 +345,10 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
             "enemy_sprite": enemy.get("sprite",""), "enemy_hue": enemy.get("hue",0),
             "enemy_variant": enemy.get("variant","normal"),
             "enemy_type": node["type"],
+            # 敌人6属性(用于前端展示)
+            "enemy_atk": enemy.get("attack",0), "enemy_def": enemy.get("defense",0),
+            "enemy_agi": enemy.get("agility",0), "enemy_luk": enemy.get("luck",0),
+            "enemy_dmg": enemy.get("damage",0), "enemy_armor": enemy.get("armor",0),
             "attack_bonus": atk_bonus, "hp_bonus": hp_bonus,
             "turn": 1, "node_id": node_id,
         }

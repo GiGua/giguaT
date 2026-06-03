@@ -130,12 +130,13 @@ def generate_dungeon_enemy(recommended_power, enemy_type="normal"):
     return result
 
 # ═══ 星蚀试炼塔敌人 ═══
-def generate_rogue_enemy(tier, node_type="monster", completed_nodes=0):
-    """根据试炼塔难度级别和节点类型生成敌人"""
-    base_power = recommended_power_by_tier(tier)
-    node_mult = {"monster": 0.95, "elite": 1.30, "boss": 1.80, "final_boss": 2.60}
-    progress_mult = 1 + completed_nodes * 0.05
-    target_power = round(base_power * node_mult.get(node_type, 0.95) * progress_mult)
+def generate_rogue_enemy(tier, node_type="monster", completed_nodes=0, player_power=None):
+    """根据试炼塔难度级别生成敌人(使用玩家实际战力而非指数曲线)"""
+    # 基础: 玩家战力的百分比, tier越高敌人越强
+    base_power = max(500, (player_power or 2000) * (0.5 + tier * 0.08))  # tier1=58%, tier20=210%
+    node_mult = {"monster": 0.85, "elite": 1.25, "boss": 1.7, "final_boss": 2.4}
+    progress_mult = 1 + completed_nodes * 0.03  # 进度轻微增加难度
+    target_power = round(base_power * node_mult.get(node_type, 0.85) * progress_mult)
     
     enemy_type = "final_boss" if node_type == "final_boss" else (
         "boss" if node_type == "boss" else ("elite" if node_type == "elite" else "normal"))
@@ -143,6 +144,10 @@ def generate_rogue_enemy(tier, node_type="monster", completed_nodes=0):
     result = generate_enemy_by_power(target_power, enemy_type, "rogue")
     result["tier"] = tier
     result["node_type"] = node_type
-    result["base_power"] = base_power
+    result["base_power"] = round(base_power)
     result["progress_mult"] = progress_mult
+    # 随机kiwi GIF
+    result["sprite"] = f"/picture/kiwi/{random.randint(0,159):04d}.gif"
+    result["hue"] = random.randint(0, 359)
+    result["variant"] = enemy_type
     return result
