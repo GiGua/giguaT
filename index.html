@@ -1123,9 +1123,16 @@ function resizeImage(file,maxW,maxH){return new Promise((resolve,reject)=>{
 
 // ═══════════════ 天使魔罐 ═══════════════
 async function sangel(){enterPage('angel');
-  const r=await api("/api/angel_can/info");const it=r.items||{};const st=r.stats||{};const pg=r.progress||{};
+  const r=await api("/api/angel_can/info");
+  if(!r.ok||!r.items){
+    // Fallback: 用sidebar的player数据
+    const p=player||{};
+    r.items={angel_hammer:p.angel_hammer||0,angel_pot:p.angel_pot||0,silver_pot:p.silver_pot||0,gold_pot:p.gold_pot||0,fragment:p.magic_can_fragment||0,blessing:p.angel_blessing_stone||0};
+    r.stats=p.angel_stats||{};r.progress={silver_need:10,gold_need:100};
+  }
+  const it=r.items;const st=r.stats||{};const pg=r.progress||{};
   let h='<div class="fade-in"><h2>🏺 天使魔罐</h2>';
-  h+='<div style="font-size:11px;color:var(--dim)">🔨锤:'+it.angel_hammer+' 💎碎片:'+it.fragment+' ✨祝福:'+it.blessing+' | 距银罐差'+pg.silver_need+'个 距金罐差'+pg.gold_need+'个</div>';
+  h+='<div style="font-size:11px;color:var(--dim)">🔨锤:<b>'+(it.angel_hammer||0)+'</b> 💎碎片:<b>'+(it.fragment||0)+'</b> ✨祝福:<b>'+(it.blessing||0)+'</b> | 距银罐差<b>'+(pg.silver_need||10)+'</b>个 距金罐差<b>'+(pg.gold_need||100)+'</b>个</div>';
   h+='<div style="font-size:10px;color:var(--purple)">天使魔罐只能从几维鸟副本获得；魔锤可用500金币购买4个。</div>';
   h+='<button class="btn btn-o btn-sm" onclick="buyHammerPack()" style="margin:6px 0">🔨 购买魔锤4个/500金币</button>';
   h+='<button class="btn btn-c btn-sm" onclick="exchangeCanFragment()" style="margin:6px 0 6px 6px" '+(it.fragment<50?'disabled':'')+'>💎 50碎片兑换天使魔罐×1</button>';
