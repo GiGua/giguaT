@@ -159,12 +159,14 @@ def roll_rogue_cards(count=3, min_quality=None):
     return random.sample(pool, min(count, len(pool)))
 
 def calc_rogue_reward(tier, node_type, completed_nodes):
-    """计算奖励: 难度越高奖励越高"""
-    base = tier * 500
-    node_mult = {"monster":1.0,"elite":2.0,"event":0.5,"item":0.2,"card":0.1,"shop":0,"rest":0,"boss":5.0}
-    tier_mult = 1.0 + tier * 0.25
-    gold = round(base * node_mult.get(node_type,1.0) * tier_mult)
-    exp = round(gold * 1.5)
+    """计算单场奖励: 合理数值, 奖励倍数1.0+tier*0.15"""
+    # 基础: 随难度增长,但不过高
+    base_gold = 40 + tier * 30     # tier1=70, tier10=340, tier20=640
+    base_exp = 60 + tier * 40       # tier1=100, tier10=460, tier20=860
+    node_mult = {"monster":1.0,"elite":2.0,"event":0.3,"item":0.2,"card":0.1,"shop":0,"rest":0,"boss":3.5}
+    tier_mult = 1.0 + tier * 0.15   # tier1=1.15, tier10=2.5, tier20=4.0
+    gold = round(base_gold * node_mult.get(node_type,1.0) * tier_mult)
+    exp = round(base_exp * node_mult.get(node_type,1.0) * tier_mult)
     return gold, exp
 
 # ═══ 进度保存 ═══
@@ -302,14 +304,14 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
         save_wrapper()
         return fj(result)
     
-    @app.route('/api/rogue/battle', methods=['POST'])
-    def api_rogue_battle():
+    @app.route('/api/rogue/battle/start', methods=['POST'])
+    def api_rogue_battle_start():
+        """初始化战斗状态,返回战斗页面所需数据"""
         p = get_player()
         if not p: return fj({"ok":False,"error":"未登录"})
         rr = p.stats.get("rogue_run")
         if not rr or not rr.get("active"):
             return fj({"ok":False,"error":"无活跃试炼"})
-        
         node_id = rr.get("current_node_id")
         node = next((n for n in rr["map"] if n["id"]==node_id), None)
         if not node: return fj({"ok":False,"error":"请先进入房间"})
@@ -319,76 +321,150 @@ def register_rogue_routes(app, _player_ref, _save_fn, _pd_fn):
         if not enemy:
             completed = len(rr.get("completed_node_ids",[]))
             enemy = generate_rogue_enemy(rr["tier"], node["type"], completed)
+            rr["current_enemy"] = enemy
         
-        # 简化战斗: 根据战力比计算胜负
-        try: cp = p.power
-        except: cp = 500
-        ep = enemy.get("power", 500)
-        ratio = cp / max(1, ep)
-        win_chance = min(0.92, max(0.08, 0.5 + (ratio-1)*0.25))
-        won = random.random() < win_chance
+        # 初始化战斗状态
+        try: player_hp = p.maxhp
+        except: player_hp = 2000
+        enemy_hp = enemy["max_hp"]
+        enemy_maxhp = enemy["max_hp"]
+        enemy_power = enemy["power"]
         
-        # 道具效果
-        temp_items = rr.get("temp_items",[])
-        has_revive = any(ti.get("id")=="revive_feather" for ti in temp_items)
-        revive_msg = None
-        if not won and has_revive:
-            won = True
-            rr["temp_items"] = [ti for ti in temp_items if ti.get("id")!="revive_feather"]
-            revive_msg = "🪶 复苏羽毛生效！"
+        # 卡牌buff效果
+        atk_bonus = 0; hp_bonus = 0
+        for c in rr.get("selected_cards",[]):
+            if c.get("effect")=="atk_pct": atk_bonus += c.get("value",0)
+            if c.get("effect")=="hp_pct": hp_bonus += c.get("value",0)
         
-        dmg_taken = round(enemy["damage"] * random.uniform(0.3, 0.8))
-        dmg_dealt = round(enemy["max_hp"] * random.uniform(0.3, 1.0) * ratio)
+        battle_state = {
+            "player_hp": player_hp, "player_maxhp": p.maxhp,
+            "enemy_hp": enemy_hp, "enemy_maxhp": enemy_maxhp,
+            "enemy_name": node["title"], "enemy_power": enemy_power,
+            "enemy_sprite": enemy.get("sprite",""), "enemy_hue": enemy.get("hue",0),
+            "enemy_variant": enemy.get("variant","normal"),
+            "enemy_type": node["type"],
+            "attack_bonus": atk_bonus, "hp_bonus": hp_bonus,
+            "turn": 1, "node_id": node_id,
+        }
+        rr["battle_state"] = battle_state
+        save_rogue_progress(p, rr)
+        save_wrapper()
         
-        # 技能
-        skill_used = None
-        if random.random() < 0.4:
-            skill_pool = ROGUE_ENEMY_SKILLS.get(node["type"] if node["type"] in ("elite","boss") else "normal",[])
-            if skill_pool: skill_used = random.choice(skill_pool)
+        return fj({"ok":True,"battle":battle_state,"rogue_run":rr,"player":pd_wrapper()})
+    
+    @app.route('/api/rogue/battle/act', methods=['POST'])
+    def api_rogue_battle_act():
+        """玩家行动 + 敌人反击"""
+        p = get_player()
+        if not p: return fj({"ok":False,"error":"未登录"})
+        rr = p.stats.get("rogue_run")
+        if not rr or not rr.get("active"):
+            return fj({"ok":False,"error":"无活跃试炼"})
         
-        gold, exp = calc_rogue_reward(rr["tier"], node["type"], len(rr.get("completed_node_ids",[])))
-        rr["accumulated_rewards"]["gold"] = rr["accumulated_rewards"].get("gold",0)+gold
-        rr["accumulated_rewards"]["exp"] = rr["accumulated_rewards"].get("exp",0)+exp
-        rr["logs"] = (rr.get("logs",[])+[f"{'✅ 胜利' if won else '💀 失败'} | 💰+{gold} ⭐+{exp}"])[-20:]
+        bs = rr.get("battle_state")
+        if not bs: return fj({"ok":False,"error":"未开始战斗"})
         
-        if won:
-            p.coins += gold
-            try: p.gain_exp(exp)
-            except: pass
-            node["completed"] = True
-            rr["completed_node_ids"] = rr.get("completed_node_ids",[])+[node_id]
+        node_id = bs["node_id"]
+        node = next((n for n in rr["map"] if n["id"]==node_id), None)
+        
+        d = fr.get_json(force=True,silent=True) or {}
+        
+        # === 玩家攻击 ===
+        try: player_atk = max(300, p.atk)
+        except: player_atk = 500
+        player_atk = int(player_atk * (1 + bs.get("attack_bonus",0)/100))
+        
+        # 基础伤害 = 攻击力 * 随机倍率 * 暴击
+        crit = random.random() < 0.15
+        dmg_mult = random.uniform(0.8, 1.3) * (2.0 if crit else 1.0)
+        player_dmg = max(1, int(player_atk * dmg_mult * 0.9))
+        bs["enemy_hp"] = max(0, bs["enemy_hp"] - player_dmg)
+        
+        log_lines = []
+        if crit: log_lines.append(f"💥 暴击! 你对{bs['enemy_name']}造成 {player_dmg} 伤害!")
+        else: log_lines.append(f"⚔️ 你攻击{bs['enemy_name']},造成 {player_dmg} 伤害")
+        
+        enemy_dead = bs["enemy_hp"] <= 0
+        
+        if not enemy_dead:
+            # === 敌人反击 ===
+            enemy_atk = node.get("_enemy_atk") if node else None
+            if not enemy_atk:
+                enemy = rr.get("current_enemy",{})
+                enemy_atk = enemy.get("damage",200)
             
-            if node["type"] in ("elite","monster") and random.random() < 0.4:
-                cards = roll_rogue_cards(3)
+            # 技能概率
+            skill_used = None
+            if random.random() < 0.35:
+                skill_pool = ROGUE_ENEMY_SKILLS.get(node["type"] if node and node["type"] in ("elite","boss") else "normal",[])
+                if skill_pool: skill_used = random.choice(skill_pool)
+            
+            if skill_used and skill_used.get("hits"):
+                # 多段攻击
+                total_dmg = 0
+                for i in range(skill_used["hits"]):
+                    hit_dmg = max(1, int(enemy_atk * (skill_used["dmg_pct"]/100) * random.uniform(0.7,1.0) * 0.12))
+                    total_dmg += hit_dmg
+                bs["player_hp"] = max(0, bs["player_hp"] - total_dmg)
+                log_lines.append(f"🐦 {bs['enemy_name']}使用【{skill_used['name']}】{skill_used['hits']}连击,共造成 {total_dmg} 伤害!")
+            elif skill_used and skill_used.get("heal_pct"):
+                heal = int(bs["enemy_maxhp"] * skill_used["heal_pct"]/100)
+                bs["enemy_hp"] = min(bs["enemy_maxhp"], bs["enemy_hp"] + heal)
+                enemy_dmg = max(1, int(enemy_atk * random.uniform(0.6,1.0) * 0.6))
+                bs["player_hp"] = max(0, bs["player_hp"] - enemy_dmg)
+                log_lines.append(f"🐦 {bs['enemy_name']}使用【{skill_used['name']}】恢复{heal}HP, 攻击造成{enemy_dmg}伤害")
             else:
-                cards = roll_rogue_cards(3) if node["type"]=="boss" else None
+                enemy_dmg = max(1, int(enemy_atk * random.uniform(0.7,1.2) * 0.6))
+                bs["player_hp"] = max(0, bs["player_hp"] - enemy_dmg)
+                log_lines.append(f"🐦 {bs['enemy_name']}反击,造成 {enemy_dmg} 伤害")
             
-            p.stats["rogue_best_tier"] = max(p.stats.get("rogue_best_tier",0), rr["tier"])
-            
-            if node["type"] == "boss":
-                if node["variant"]=="final_boss":
-                    p.stats["rogue_floor20_clears"] = p.stats.get("rogue_floor20_clears",0)+1
-                p.stats["rogue_boss_kills"] = p.stats.get("rogue_boss_kills",0)+1
-                rr["active"] = False
-                rr["cleared"] = True
-                cards = None
-            elif node["type"] == "elite":
-                p.stats["rogue_elite_kills"] = p.stats.get("rogue_elite_kills",0)+1
-            
-            result = advance_after_room(p, rr, node)
-        else:
-            rr["active"] = False
-            result = {"ok":True,"won":False,"node":node,"enemy":enemy,
-                      "skill_used":skill_used,"dmg_taken":dmg_taken,"dmg_dealt":dmg_dealt,
-                      "gold":gold,"exp":exp,"rogue_run":rr,"player":pd_wrapper(),
-                      "enemy_sprite":enemy.get("sprite",""),"enemy_hue":enemy.get("hue",0),
-                      "enemy_variant":enemy.get("variant","normal")}
+            bs["skill_used"] = skill_used
         
-        if revive_msg: result["revive_msg"] = revive_msg
-        if result.get("won") and cards: result["cards"] = cards
+        bs["turn"] = bs.get("turn",1) + 1
+        player_dead = bs["player_hp"] <= 0
+        
+        won = enemy_dead and not player_dead
+        
+        result = {"ok":True,"won":won,"enemy_dead":enemy_dead,"player_dead":player_dead,
+                  "player_dmg":player_dmg,"battle":bs,"logs":log_lines}
+        
+        if won or player_dead:
+            # 战斗结束,立即发奖励
+            gold, exp = calc_rogue_reward(rr["tier"], node["type"], len(rr.get("completed_node_ids",[])))
+            result["gold"] = gold; result["exp"] = exp
+            
+            rr["accumulated_rewards"]["gold"] = rr["accumulated_rewards"].get("gold",0)+gold
+            rr["accumulated_rewards"]["exp"] = rr["accumulated_rewards"].get("exp",0)+exp
+            
+            if won:
+                p.coins += gold
+                try: p.gain_exp(exp)
+                except: pass
+                node["completed"] = True
+                rr["completed_node_ids"] = rr.get("completed_node_ids",[])+[node_id]
+                rr["battle_state"] = None
+                
+                if node["type"]=="boss":
+                    rr["active"] = False; rr["cleared"] = True
+                    p.stats["rogue_boss_kills"] = p.stats.get("rogue_boss_kills",0)+1
+                elif node["type"]=="elite":
+                    p.stats["rogue_elite_kills"] = p.stats.get("rogue_elite_kills",0)+1
+                
+                result["cards"] = roll_rogue_cards(3) if node["type"] in ("elite","boss") or random.random()<0.35 else None
+                
+                adv = advance_after_room(p, rr, node)
+                result.update({k:v for k,v in adv.items() if k not in result})
+            else:
+                rr["active"] = False
+                rr["battle_state"] = None
+                result["message"] = f"止步于{node['title']}"
+            
+            rr["logs"] = (rr.get("logs",[])+[f"{'✅ 胜利' if won else '💀 失败'} | 💰+{gold} ⭐+{exp}"])[-20:]
         
         save_rogue_progress(p, rr)
         save_wrapper()
+        result["rogue_run"] = rr
+        result["player"] = pd_wrapper()
         return fj(result)
     
     def advance_after_room(p, rr, node):

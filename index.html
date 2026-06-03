@@ -1203,7 +1203,7 @@ async function startBotBattle(botId){
 }
 
 // ═══════════════ 星蚀试炼塔 v2 (难度选择→地图→战斗) ═══════════════
-let rogueRun=null;
+let rogueRun=null,rogueBattle=null;
 const NC={'monster':'#4a90d9','elite':'#cc44ff','event':'#ffaa00','item':'#44cc66','card':'#9966ff','shop':'#ffcc00','rest':'#44cccc','boss':'#cc2222'};
 const NI={'monster':'⚔️','elite':'💀','event':'❓','item':'🎁','card':'🃏','shop':'🏪','rest':'🔥','boss':'👑'};
 
@@ -1268,11 +1268,11 @@ async function rogueEnterNode(nodeId){
   rogueRun=er.rogue_run;
   if(er.room_type==='boss'&&!rogueRun.warning_shown){
     showModal('⚠ 终焉试炼','<div style="color:var(--red)">关底Boss<br>推荐战力:'+er.recommended_power+'<br>你的战力:'+player.power+'</div>',
-      '<button class="btn btn-c" onclick="closeModal();(async()=>{await api(\'/api/rogue/boss_warning\',{});rogueDoBattle()})()">挑战</button> <button class="btn btn-r btn-sm" onclick="closeModal()">取消</button>');
+      '<button class="btn btn-c" onclick="closeModal();(async()=>{await api(\'/api/rogue/boss_warning\',{});showRogueBattle()})()">挑战</button> <button class="btn btn-r btn-sm" onclick="closeModal()">取消</button>');
     return;
   }
   switch(er.room_type){
-    case'monster':case'elite':case'boss':if(er.battle_ready)rogueDoBattle();break;
+    case'monster':case'elite':case'boss':if(er.battle_ready)showRogueBattle();break;
     case'event':if(er.already_used){alert('已触发过');return}if(er.event)showRogueEvent(er.event);break;
     case'item':if(er.item)showModal('🎁',er.item.name+'<br>'+er.item.desc,'<button class="btn btn-c" onclick="rogueItemClaim(\''+er.item.id+'\')">领取</button>');break;
     case'card':if(er.cards)showRogueCards(er.cards,'卡牌房选卡');break;
@@ -1281,23 +1281,63 @@ async function rogueEnterNode(nodeId){
   }
 }
 
-async function rogueDoBattle(){
-  const r=await api('/api/rogue/battle',{});
-  if(!r.ok){alert(r.error||'战斗失败');srogue();return}
+async function showRogueBattle(){
+  // 初始化战斗
+  const r=await api('/api/rogue/battle/start',{});
+  if(!r.ok){alert(r.error||'战斗初始化失败');srogue();return}
   rogueRun=r.rogue_run;
-  if(r.revive_msg)addLog(r.revive_msg);
-  if(r.skill_used)addLog('🐦 '+r.skill_used.name);
-  if(r.enemy_sprite){
-    const hue=r.enemy_hue||0,v=r.enemy_variant||'normal',isFB=v==='final_boss';
-    const cls=isFB?'final-kiwi-boss':'kiwi-enemy';
-    const filter=isFB?'hue-rotate('+hue+'deg) saturate(2) contrast(1.25) drop-shadow(0 0 18px #b000ff)':'hue-rotate('+hue+'deg) saturate(1.4) brightness(1.05)';
-    const el=document.getElementById('rogue-enemy-visual');
-    if(el)el.innerHTML='<div class="rogue-enemy-wrap"><img class="'+cls+'" src="'+r.enemy_sprite+'" style="filter:'+filter+';--kiwi-hue:'+hue+'deg"><div class="enemy-name">'+(r.node?.title||'敌人')+'</div></div>';
+  rogueBattle=r.battle;
+  if(!rogueBattle)return;
+  renderRogueBattlePage();
+}
+
+function renderRogueBattlePage(){
+  const bs=rogueBattle;
+  const hue=bs.enemy_hue||0;const v=bs.enemy_variant||'normal';
+  const isFB=v==='final_boss';const cls=isFB?'final-kiwi-boss':'kiwi-enemy';
+  const filter=isFB?'hue-rotate('+hue+'deg) saturate(2) contrast(1.25) drop-shadow(0 0 18px #b000ff)':'hue-rotate('+hue+'deg) saturate(1.4) brightness(1.05)';
+  const c=document.getElementById('content');
+  c.innerHTML=
+    '<div class="fade-in"><h2>⚔️ 星蚀试炼</h2>'+
+    '<div class="battle-top"><div class="battle-vs">'+
+    '<div style="display:flex;justify-content:space-between"><span style="color:var(--green)">🟢 '+player.name+'</span><span style="color:var(--red)">🔴 '+bs.enemy_name+'</span></div>'+
+    '<div style="font-size:12px;margin:3px 0"><span style="color:var(--dim)">HP '+bs.player_hp+'/'+bs.player_maxhp+'</span><span style="float:right;color:var(--dim)">HP '+bs.enemy_hp+'/'+bs.enemy_maxhp+'</span></div>'+
+    '<div style="display:flex;justify-content:space-between"><div style="width:'+Math.max(0,bs.player_hp/bs.player_maxhp*100)+'%;height:6px;background:var(--green);border-radius:3px"></div><div style="width:100%"></div></div>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:2px"><div style="width:100%"></div><div style="width:'+Math.max(0,bs.enemy_hp/bs.enemy_maxhp*100)+'%;height:6px;background:var(--red);border-radius:3px;margin-left:auto"></div></div>'+
+    '</div></div>'+
+    '<div class="rogue-enemy-wrap"><img class="'+cls+'" src="'+bs.enemy_sprite+'" style="filter:'+filter+';--kiwi-hue:'+hue+'deg"><div class="enemy-name">'+bs.enemy_name+' ⚡'+(bs.enemy_power||0)+'</div></div>'+
+    '<div style="text-align:center;color:var(--dim);font-size:11px;margin:4px 0">回合: <b>'+bs.turn+'</b> | 攻击加成: +'+(bs.attack_bonus||0)+'%</div>'+
+    '<div class="action-row"><button class="btn btn-c btn-lg" onclick="rogueAttack()" id="btn-rogue-atk">⚔️ 攻击!</button></div>'+
+    '<div id="rogue-battle-log" style="margin-top:8px;max-height:150px;overflow-y:auto;font-size:11px;color:var(--dim)"></div></div>';
+}
+
+async function rogueAttack(){
+  const btn=document.getElementById('btn-rogue-atk');if(btn)btn.disabled=true;
+  const r=await api('/api/rogue/battle/act',{});
+  if(!r.ok){alert(r.error||'行动失败');if(btn)btn.disabled=false;return}
+  rogueRun=r.rogue_run;rogueBattle=r.battle;
+  
+  // 显示日志
+  const logEl=document.getElementById('rogue-battle-log');
+  if(logEl&&r.logs){r.logs.forEach(l=>{logEl.innerHTML+='<div>'+l+'</div>'});logEl.scrollTop=logEl.scrollHeight}
+  
+  if(r.won||r.player_dead){
+    // 战斗结束
+    if(r.won){
+      const msg='💰+'+r.gold+' ⭐+'+r.exp;
+      if(r.cards&&r.cards.length>0){
+        showRogueCards(r.cards,'胜利! '+msg);
+      }else{
+        showModal('✅ 胜利!',msg,'<button class="btn btn-c" onclick="closeModal();rogueShowMap()">继续</button>');
+      }
+    }else{
+      showModal('💀 失败',r.message||'止步于此','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');
+    }
+  }else{
+    // 继续战斗,刷新UI
+    renderRogueBattlePage();
+    if(btn)btn.disabled=false;
   }
-  if(r.cleared){showModal('🏆 通关!','所有奖励已发放','<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
-  if(!r.won){showModal('💀 失败','累计💰'+(rogueRun.accumulated_rewards?.gold||0)+' ⭐'+(rogueRun.accumulated_rewards?.exp||0),'<button class="btn btn-c" onclick="closeModal();srogue()">返回</button>');return}
-  if(r.cards&&r.cards.length>0){showRogueCards(r.cards,'战斗奖励选卡');return}
-  rogueShowMap();
 }
 
 function showRogueCards(cards,title){
